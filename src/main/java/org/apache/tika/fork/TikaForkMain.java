@@ -29,54 +29,50 @@ public class TikaForkMain {
 //      .inheritIO()
 //      .start();
     String host = InetAddress.getLocalHost().getHostAddress();
-    Socket socket;
-
-//    int maxRetries = 20;
-//
-//    while (true) {
-//      try {
-//        if (!p.isAlive()) {
-//          throw new RuntimeException("Process terminated abnormally");
-//        }
-//        socket = new Socket(host, PORT);
-//        if (socket != null || --maxRetries < 0) {
-//          break;
-//        }
-//      } catch (IOException e) {
-//        Thread.sleep(1000);
-//      }
-//    }
 
     File file = new File("/home/ndipiazza/Downloads/pdf-sample.pdf");
     // Get the size of the file
     byte[] bytes = new byte[16 * 1024];
-    socket = new Socket(host, PORT);
+    Socket socket = new Socket(host, PORT);
 
     // First write the bytes to the tika parser
     try (InputStream in = new FileInputStream(file);
          OutputStream out = socket.getOutputStream();
-         InputStream metadataIn = socket.getInputStream();
+         //InputStream metadataIn = socket.getInputStream();
     ) {
       int count;
       while ((count = in.read(bytes)) > 0) {
         out.write(bytes,0, count);
       }
       System.out.println("Done sending the bytes!");
-      ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
-      Metadata metadata = (Metadata)objectInputStream.readObject();
-      System.out.println(metadata);
+
+//      ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
+//      Metadata metadata = (Metadata)objectInputStream.readObject();
+//      System.out.println(metadata);
+
     } finally {
       socket.close();
+    }
+  }
+
+  private static Socket getSocket(String host) throws InterruptedException {
+    Socket socket;
+    int maxRetries = 20;
+
+    while (true) {
+      try {
+//        if (!p.isAlive()) {
+//          throw new RuntimeException("Process terminated abnormally");
+//        }
+        socket = new Socket(host, PORT);
+        if (socket != null || --maxRetries < 0) {
+          break;
+        }
+      } catch (IOException e) {
+        Thread.sleep(1000);
+      }
     }
 
-    // now get the response
-    socket = new Socket(host, PORT);
-    try (InputStream metadataIn = socket.getInputStream()) {
-      ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
-      Metadata metadata = (Metadata)objectInputStream.readObject();
-      System.out.println(metadata);
-    } finally {
-      socket.close();
-    }
+    return socket;
   }
 }

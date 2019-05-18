@@ -59,6 +59,8 @@ public class TikaMain {
 
   public static void main(String[] args) throws Exception {
 
+    System.out.println("args: " + args[0] + " " + args[1]);
+
     ParseContext context = new ParseContext();
     Detector detector = new DefaultDetector();
     TikaConfig config = TikaConfig.getDefaultConfig();
@@ -71,11 +73,17 @@ public class TikaMain {
     try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(args[0]));
          Socket socket = serverSocket.accept();
          InputStream inputStream = socket.getInputStream();
-         ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream())) {
+         //ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+         ) {
       TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
-      compositeParser.parse(tikaInputStream, getContentHandler(args[1], metadata, false), metadata, context);
-      objectOutputStream.writeObject(metadata);
-      objectOutputStream.flush();
+      TikaParsingHandler contentHandler = getContentHandler(args[1], metadata, false);
+      compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
+
+      System.out.println("Got metadata! " + metadata);
+      System.out.println("Got content! " + contentHandler.getOutput().toString());
+
+//      objectOutputStream.writeObject(metadata);
+//      objectOutputStream.flush();
     }
   }
 }

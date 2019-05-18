@@ -18,14 +18,7 @@ dependencies {
   testCompile group: 'junit', name: 'junit', version: '4.12'
 }
 
-//create a single Jar with all dependencies
-task fatJar(type: Jar) {
-  manifest {
-    attributes 'Implementation-Title': 'Tika Fork',
-        'Implementation-Version': version,
-        'Main-Class': 'org.apache.tika.fork.TikaMain'
-  }
-  baseName = project.name + '-all'
-  from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
-  with jar
+task execute(type:JavaExec) {
+  main = mainClass
+  classpath = sourceSets.main.runtimeClasspath
 }
