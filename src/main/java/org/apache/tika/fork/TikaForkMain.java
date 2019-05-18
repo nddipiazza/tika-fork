@@ -1,15 +1,9 @@
 package org.apache.tika.fork;
 
-import com.google.common.collect.Lists;
-import org.apache.commons.io.IOUtils;
-import org.apache.tika.metadata.Metadata;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
@@ -19,15 +13,6 @@ public class TikaForkMain {
   public static final int PORT = 9876;
 
   public static void main(String[] args) throws Exception {
-//    Process p = new ProcessBuilder(Lists.newArrayList("java",
-//      "-cp",
-//      "build/libs/tika-fork-all-1.0.jar",
-//      "org.apache.tika.fork.TikaMain",
-//      String.valueOf(PORT),
-//      "http://unec.edu.az/application/uploads/2014/12/pdf-sample.pdf",
-//      "application/pdf"))
-//      .inheritIO()
-//      .start();
     String host = InetAddress.getLocalHost().getHostAddress();
 
     File file = new File(args[0]);
@@ -61,9 +46,6 @@ public class TikaForkMain {
 
     while (true) {
       try {
-//        if (!p.isAlive()) {
-//          throw new RuntimeException("Process terminated abnormally");
-//        }
         socket = new Socket(host, PORT);
         if (socket != null || --maxRetries < 0) {
           break;
