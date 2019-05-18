@@ -31,6 +31,10 @@ public class TikaForkMain {
       }
       System.out.println("Done sending the bytes!");
 
+      // I want to be able to now read the resulting stream coming from the tika
+      // parse response. But when I enable this, it causes the tika input stream to
+      // never start.
+
 //      ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
 //      Metadata metadata = (Metadata)objectInputStream.readObject();
 //      System.out.println(metadata);

@@ -47,6 +47,8 @@ public class TikaMain {
     if (contentType == null) {
       contentType = "application/octet-stream";
     }
+
+    // TODO - i want to send this to the socket output stream
     ByteArrayOutputStream out = new ByteArrayOutputStream(bufferSize);
     ContentHandler main = new TikaBodyContentHandler(out, TikaConstants.defaultOutputEncoding);
 
@@ -76,11 +78,17 @@ public class TikaMain {
          //ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
          ) {
       TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
+
+      // I want to send the output stream of the socket here so that the body of
+      // tika write to the socket output stream!
       TikaParsingHandler contentHandler = getContentHandler(args[1], metadata, false);
       compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
 
       System.out.println("Got metadata! " + metadata);
       System.out.println("Got content! " + contentHandler.getOutput().toString());
+
+      // I can't figure out how to get this to work. The stream freezes when parsing after
+      // i add it.
 
 //      objectOutputStream.writeObject(metadata);
 //      objectOutputStream.flush();
