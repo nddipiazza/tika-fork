@@ -30,7 +30,7 @@ public class TikaForkMain {
 //      .start();
     String host = InetAddress.getLocalHost().getHostAddress();
 
-    File file = new File("/home/ndipiazza/Downloads/pdf-sample.pdf");
+    File file = new File(args[0]);
     // Get the size of the file
     byte[] bytes = new byte[16 * 1024];
     Socket socket = new Socket(host, PORT);
