@@ -31,10 +31,10 @@ public class TikaProcessPool implements AutoCloseable {
     pool.close();
   }
 
-  public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInputStream, OutputStream contentOutputStream) throws Exception {
+  public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInputStream, OutputStream contentOutputStream, long abortAfterMs) throws Exception {
     TikaProcess process = (TikaProcess) pool.borrowObject();
     try {
-      return process.parse(baseUri, contentType, extractHtmlLinks, contentInputStream, contentOutputStream);
+      return process.parse(baseUri, contentType, extractHtmlLinks, contentInputStream, contentOutputStream, abortAfterMs);
     } catch (Exception e) {
       pool.invalidateObject(process);
       // Do not return the object to the pool twice

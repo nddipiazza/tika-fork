@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -82,7 +83,7 @@ public class TikaProcessTest {
             }
             ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
             try (FileInputStream fis = new FileInputStream(path)) {
-              Metadata metadata = tikaProcessPool.parse(path, contentType, false, fis, contentOutputStream);
+              Metadata metadata = tikaProcessPool.parse(path, contentType, false, fis, contentOutputStream, 300000L);
               LOG.info("Metadata from the tika process: {}", metadata);
               Assert.assertEquals(numExpectedMetadataElms, metadata.size());
               //LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
@@ -125,9 +126,29 @@ public class TikaProcessTest {
       -1)) {
       ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
       try (FileInputStream fis = new FileInputStream(bombFilePath)) {
-        tikaProcessPool.parse(bombFilePath, bombContentType, false, fis, contentOutputStream);
+        tikaProcessPool.parse(bombFilePath, bombContentType, false, fis, contentOutputStream, 300000L);
         Assert.fail("Should have OOM'd");
       } catch (Exception e) {
+        LOG.info("Got the expected exception", e);
+      }
+    }
+  }
+
+  @Test
+  public void testTikaParseTimeoutExceeded() throws Exception {
+    try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
+      tikaDistPath,
+      200,
+      1,
+      1,
+      1,
+      -1,
+      -1)) {
+      ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
+      try (FileInputStream fis = new FileInputStream(bombFilePath)) {
+        tikaProcessPool.parse(bombFilePath, bombContentType, false, fis, contentOutputStream, 5000L);
+        Assert.fail("Should have timed out");
+      } catch (TimeoutException e) {
         LOG.info("Got the expected exception", e);
       }
     }

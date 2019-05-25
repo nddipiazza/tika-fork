@@ -1,5 +1,7 @@
 package org.apache.tika.main;
 
+import com.google.common.collect.Lists;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.tika.config.TikaConfig;
 import org.apache.tika.detect.DefaultDetector;
@@ -75,79 +77,114 @@ public class TikaMain {
     return new TikaParsingHandler(mainUrl, out, main, linksHandler);
   }
 
-  private int contentInPort;
-  private int metadataOutPort;
-  private int contentOutPort;
+  private ServerSocket contentInServerSocket;
+  private ServerSocket metadataOutServerSocket;
+  private ServerSocket contentOutServerSocket;
+  private String runUuid;
 
-  public TikaMain(int contentInPort, int metadataOutPort, int contentOutPort) {
-    this.contentInPort = contentInPort;
-    this.metadataOutPort = metadataOutPort;
-    this.contentOutPort = contentOutPort;
+  public TikaMain(String runUuid) {
+    this.runUuid = runUuid;
   }
 
   private void run() throws Exception {
     ExecutorService es = Executors.newFixedThreadPool(3);
+    String portsFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-ports-" + runUuid + ".properties";
+    File portsFile = new File(portsFilePath);
 
-    while (true) {
-      LOG.info("Waiting for the next input on contentInPort={}, contentOutPort={}, metadataOutPort={}", contentInPort, contentOutPort, metadataOutPort);
+    try {
+      contentInServerSocket = new ServerSocket(0);
+      metadataOutServerSocket = new ServerSocket(0);
+      contentOutServerSocket = new ServerSocket(0);
 
-      final PipedInputStream metadataInputStream = new PipedInputStream();
-      final PipedOutputStream metadataOutputStream = new PipedOutputStream();
+      FileUtils.writeLines(portsFile,
+        Lists.newArrayList(
+          String.valueOf(contentInServerSocket.getLocalPort()),
+          String.valueOf(metadataOutServerSocket.getLocalPort()),
+          String.valueOf(contentOutServerSocket.getLocalPort())
+        )
+      );
 
-      metadataInputStream.connect(metadataOutputStream);
+      while (true) {
+        final PipedInputStream metadataInputStream = new PipedInputStream();
+        final PipedOutputStream metadataOutputStream = new PipedOutputStream();
 
-      final PipedInputStream contentInputStream = new PipedInputStream();
-      final PipedOutputStream contentOutputStream = new PipedOutputStream();
+        metadataInputStream.connect(metadataOutputStream);
 
-      contentInputStream.connect(contentOutputStream);
+        final PipedInputStream contentInputStream = new PipedInputStream();
+        final PipedOutputStream contentOutputStream = new PipedOutputStream();
 
-      es.execute(() -> {
-        try {
-          parseFile(metadataOutputStream, contentOutputStream);
-        } catch (Exception e) {
+        contentInputStream.connect(contentOutputStream);
+
+        es.execute(() -> {
           try {
-            contentOutputStream.close();
-          } catch (IOException e1) {
-            LOG.debug("Couldn't close content output stream.");
+            parseFile(metadataOutputStream, contentOutputStream);
+          } catch (Exception e) {
+            try {
+              contentOutputStream.close();
+            } catch (IOException e1) {
+              LOG.debug("Couldn't close content output stream.");
+            }
+            throw new RuntimeException("Could not parse file", e);
           }
-          throw new RuntimeException("Could not parse file", e);
-        }
-      });
+        });
 
-      Future metadataFuture = es.submit(() -> {
-        try {
-          writeMetadata(metadataInputStream);
-        } catch (Exception e) {
+        Future metadataFuture = es.submit(() -> {
           try {
-            metadataOutputStream.close();
-          } catch (IOException e1) {
-            LOG.debug("Couldn't close metadata output stream.");
+            writeMetadata(metadataInputStream);
+          } catch (Exception e) {
+            try {
+              metadataOutputStream.close();
+            } catch (IOException e1) {
+              LOG.debug("Couldn't close metadata output stream.");
+            }
+            throw new RuntimeException("Could not write metadata", e);
           }
-          throw new RuntimeException("Could not write metadata", e);
-        }
-      });
+        });
 
-      Future contentFuture = es.submit(() -> {
-        try {
-          writeContent(contentInputStream);
-        } catch (Exception e) {
+        Future contentFuture = es.submit(() -> {
           try {
-            contentInputStream.close();
-          } catch (IOException e1) {
-            LOG.debug("Couldn't close content input stream.");
+            writeContent(contentInputStream);
+          } catch (Exception e) {
+            try {
+              contentInputStream.close();
+            } catch (IOException e1) {
+              LOG.debug("Couldn't close content input stream.");
+            }
+            throw new RuntimeException("Could not write content", e);
           }
-          throw new RuntimeException("Could not write content", e);
-        }
-      });
+        });
 
-      metadataFuture.get();
-      contentFuture.get();
+        metadataFuture.get();
+        contentFuture.get();
+      }
+    } finally {
+      try {
+        if (contentInServerSocket != null && contentInServerSocket.isBound()) {
+          contentInServerSocket.close();
+        }
+      } catch (IOException e) {
+        LOG.debug("Could not close content in socket server", e);
+      }
+      try {
+        if (contentOutServerSocket != null && contentOutServerSocket.isBound()) {
+          contentOutServerSocket.close();
+        }
+      } catch (IOException e) {
+        LOG.debug("Could not close content out socket server", e);
+      }
+      try {
+        if (metadataOutServerSocket != null && metadataOutServerSocket.isBound()) {
+          metadataOutServerSocket.close();
+        }
+      } catch (IOException e) {
+        LOG.debug("Could not close metadata out socket server", e);
+      }
+      FileUtils.deleteQuietly(portsFile);
     }
   }
 
   private void writeMetadata(InputStream inputStream) throws Exception {
-    try (ServerSocket serverSocket = new ServerSocket(metadataOutPort);
-         Socket socket = serverSocket.accept();
+    try (Socket socket = metadataOutServerSocket.accept();
          OutputStream outputStream = socket.getOutputStream()
     ) {
       long numRead;
@@ -158,8 +195,7 @@ public class TikaMain {
   }
 
   private void writeContent(InputStream inputStream) throws Exception {
-    try (ServerSocket serverSocket = new ServerSocket(contentOutPort);
-         Socket socket = serverSocket.accept();
+    try (Socket socket = contentOutServerSocket.accept();
          OutputStream outputStream = socket.getOutputStream()
     ) {
       long numRead;
@@ -176,13 +212,14 @@ public class TikaMain {
     Metadata metadata = new Metadata();
     CompositeParser compositeParser = new CompositeParser(config.getMediaTypeRegistry(), config.getParser());
 
-    try (ServerSocket serverSocket = new ServerSocket(contentInPort);
-         Socket socket = serverSocket.accept();
+    try (Socket socket = contentInServerSocket.accept();
          InputStream inputStream = socket.getInputStream();
          ObjectOutputStream objectOutputStream = new ObjectOutputStream(metadataOutputStream)) {
 
+
+
       Properties parseProperties = new Properties();
-      String propertiesFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-fork-" + contentInPort + ".properties";
+      String propertiesFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-fork-" + runUuid + ".properties";
       if (!Files.exists(Paths.get(propertiesFilePath))) {
         throw new Exception("Cannot find property file: " + propertiesFilePath);
       }
@@ -214,9 +251,7 @@ public class TikaMain {
   }
 
   public static void main(String[] args) throws Exception {
-    TikaMain tikaMain = new TikaMain(Integer.parseInt(args[0]),
-      Integer.parseInt(args[1]),
-      Integer.parseInt(args[2]));
+    TikaMain tikaMain = new TikaMain(args[0]);
     tikaMain.run();
   }
 }

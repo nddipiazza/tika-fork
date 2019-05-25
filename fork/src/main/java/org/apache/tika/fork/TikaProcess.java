@@ -5,22 +5,28 @@ import org.apache.tika.metadata.Metadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class TikaProcess {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcess.class);
@@ -39,18 +45,11 @@ public class TikaProcess {
   private int contentOutPort;
   private Process process;
   private List<String> command;
+  private String runUuid = UUID.randomUUID().toString();
   private String propertiesFilePath;
-
-  public static Integer findRandomOpenPortOnAllLocalInterfaces() throws IOException {
-    try (ServerSocket socket = new ServerSocket(0)) {
-      return socket.getLocalPort();
-    }
-  }
+  private String portsFilePath;
 
   public TikaProcess(String javaPath, String tikaDistPath, int tikaMaxHeapSizeMb) throws IOException {
-    this.contentInPort = findRandomOpenPortOnAllLocalInterfaces();
-    this.metadataOutPort = findRandomOpenPortOnAllLocalInterfaces();
-    this.contentOutPort = findRandomOpenPortOnAllLocalInterfaces();
     command = new ArrayList<>();
     command.add(javaPath == null || javaPath.trim().length() == 0 ? CURRENT_JAVA_BINARY : javaPath);
     if (tikaMaxHeapSizeMb > 0) {
@@ -59,15 +58,42 @@ public class TikaProcess {
     command.add("-cp");
     command.add(tikaDistPath + File.separator + "*");
     command.add("org.apache.tika.main.TikaMain");
-    command.add(String.valueOf(contentInPort));
-    command.add(String.valueOf(metadataOutPort));
-    command.add(String.valueOf(contentOutPort));
-    propertiesFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-fork-" + contentInPort + ".properties";
+    command.add(runUuid);
+    String parentFolder = System.getProperty("java.io.tmpdir") + File.separator;
+    propertiesFilePath = parentFolder + "tika-fork-" + runUuid + ".properties";
+    portsFilePath = parentFolder + "tika-ports-" + runUuid + ".properties";
     try {
       process = new ProcessBuilder(command)
         .inheritIO()
         .start();
       LOG.info("Started command: {}", command);
+      List<Integer> ports = new ArrayList<>();
+      int maxAttempts = 100;
+      while (--maxAttempts > 0 && ports.size() < 3) {
+        try (FileReader fr = new FileReader(new File(portsFilePath));
+             BufferedReader br = new BufferedReader(fr)) {
+          ports.clear();
+          String nextLine;
+          while ((nextLine = br.readLine()) != null) {
+            ports.add(Integer.parseInt(nextLine));
+          }
+        } catch (Exception ignore) {
+          LOG.debug("Ignoring an exception getting the ports for Tika Process " + runUuid);
+        }
+        if (ports.size() < 3) {
+          try {
+            Thread.sleep(50L);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }
+      }
+      if (ports.size() < 3) {
+        throw new RuntimeException("Could not get the ports from Tika process " + runUuid);
+      }
+      contentInPort = ports.get(0);
+      metadataOutPort = ports.get(1);
+      contentOutPort = ports.get(2);
     } catch (IOException e) {
       throw new RuntimeException("Could not start tika external with command " + command, e);
     }
@@ -86,7 +112,12 @@ public class TikaProcess {
     }
   }
 
-  public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInStream, OutputStream contentOutputStream) throws InterruptedException, ExecutionException {
+  public Metadata parse(String baseUri,
+                        String contentType,
+                        boolean extractHtmlLinks,
+                        InputStream contentInStream,
+                        OutputStream contentOutputStream,
+                        long abortAfterMs) throws InterruptedException, ExecutionException, TimeoutException {
     ExecutorService es = Executors.newFixedThreadPool(3);
     Properties parseProperties = new Properties();
     parseProperties.setProperty("baseUri", baseUri);
@@ -114,13 +145,37 @@ public class TikaProcess {
     Future contentFuture = es.submit(() -> {
       try {
         getContent(contentOutPort, contentOutputStream);
+        return true;
       } catch (Exception e) {
         throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
       }
     });
 
-    contentFuture.get();
-    Metadata metadataResult = metadataFuture.get();
+    Instant mustFinishByInstant = Instant.now().plus(Duration.ofMillis(abortAfterMs));
+    while (true) {
+      try {
+        contentFuture.get(250, TimeUnit.MILLISECONDS);
+        break;
+      } catch (TimeoutException e) {
+        LOG.debug("Still waiting for content from parse");
+        if (Instant.now().isAfter(mustFinishByInstant)) {
+          throw e;
+        }
+      }
+    }
+
+    Metadata metadataResult;
+    while (true) {
+      try {
+        metadataResult = metadataFuture.get(250, TimeUnit.MILLISECONDS);
+        break;
+      } catch (TimeoutException e) {
+        LOG.debug("Still waiting for metadata from parse");
+        if (Instant.now().isAfter(mustFinishByInstant)) {
+          throw e;
+        }
+      }
+    }
 
     es.shutdown();
 
