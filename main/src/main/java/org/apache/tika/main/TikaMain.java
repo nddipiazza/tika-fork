@@ -16,6 +16,7 @@ import org.xml.sax.ContentHandler;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
@@ -104,6 +105,11 @@ public class TikaMain {
         try {
           parseFile(metadataOutputStream, contentOutputStream);
         } catch (Exception e) {
+          try {
+            contentOutputStream.close();
+          } catch (IOException e1) {
+            LOG.debug("Couldn't close content output stream.");
+          }
           throw new RuntimeException("Could not parse file", e);
         }
       });
@@ -112,6 +118,11 @@ public class TikaMain {
         try {
           writeMetadata(metadataInputStream);
         } catch (Exception e) {
+          try {
+            metadataOutputStream.close();
+          } catch (IOException e1) {
+            LOG.debug("Couldn't close metadata output stream.");
+          }
           throw new RuntimeException("Could not write metadata", e);
         }
       });
@@ -120,6 +131,11 @@ public class TikaMain {
         try {
           writeContent(contentInputStream);
         } catch (Exception e) {
+          try {
+            contentInputStream.close();
+          } catch (IOException e1) {
+            LOG.debug("Couldn't close content input stream.");
+          }
           throw new RuntimeException("Could not write content", e);
         }
       });
@@ -159,6 +175,7 @@ public class TikaMain {
     TikaConfig config = TikaConfig.getDefaultConfig();
     Metadata metadata = new Metadata();
     CompositeParser compositeParser = new CompositeParser(config.getMediaTypeRegistry(), config.getParser());
+
     try (ServerSocket serverSocket = new ServerSocket(contentInPort);
          Socket socket = serverSocket.accept();
          InputStream inputStream = socket.getInputStream();
@@ -182,14 +199,18 @@ public class TikaMain {
       }
 
       boolean extractHtmlLinks = Boolean.parseBoolean(parseProperties.getProperty("extractHtmlLinks", "false"));
+
+      LOG.info("Next file - baseUri={}, contentType={}, extractHtmlLinks={}", baseUri, contentType, extractHtmlLinks);
+
       TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
 
       TikaParsingHandler contentHandler = getContentHandler(baseUri, metadata, contentOutputStream, extractHtmlLinks);
       compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
 
       objectOutputStream.writeObject(metadata);
+    } finally {
+      contentOutputStream.close();
     }
-    contentOutputStream.close();
   }
 
   public static void main(String[] args) throws Exception {

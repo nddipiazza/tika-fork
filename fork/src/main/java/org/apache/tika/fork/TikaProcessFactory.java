@@ -12,17 +12,19 @@ public class TikaProcessFactory extends BasePooledObjectFactory<TikaProcess> {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcessFactory.class);
 
   private String tikaDistPath;
+  private String javaPath;
   private int tikaMaxHeapSizeMb;
 
-  public TikaProcessFactory(String tikaDistPath, int tikaMaxHeapSizeMb) {
+  public TikaProcessFactory(String javaPath, String tikaDistPath, int tikaMaxHeapSizeMb) {
     this.tikaDistPath = tikaDistPath;
     this.tikaMaxHeapSizeMb = tikaMaxHeapSizeMb;
+    this.javaPath = javaPath;
   }
 
   @Override
   public TikaProcess create() {
     try {
-      return new TikaProcess(tikaDistPath, tikaMaxHeapSizeMb);
+      return new TikaProcess(javaPath, tikaDistPath, tikaMaxHeapSizeMb);
     } catch (IOException e) {
       throw new RuntimeException("Could not create tika process", e);
     }

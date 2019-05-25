@@ -25,11 +25,21 @@ import java.util.concurrent.Future;
 public class TikaProcess {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcess.class);
 
+  static private final String CURRENT_JAVA_BINARY;
+  static {
+    if (System.getProperty("os.name").startsWith("Win")) {
+      CURRENT_JAVA_BINARY = System.getProperties().getProperty("java.home") + File.separator + "bin" + File.separator + "java.exe";
+    } else {
+      CURRENT_JAVA_BINARY = System.getProperties().getProperty("java.home") + File.separator + "bin" + File.separator + "java";
+    }
+  }
+
   private int contentInPort;
   private int metadataOutPort;
   private int contentOutPort;
   private Process process;
   private List<String> command;
+  private String propertiesFilePath;
 
   public static Integer findRandomOpenPortOnAllLocalInterfaces() throws IOException {
     try (ServerSocket socket = new ServerSocket(0)) {
@@ -37,12 +47,12 @@ public class TikaProcess {
     }
   }
 
-  public TikaProcess(String tikaDistPath, int tikaMaxHeapSizeMb) throws IOException {
+  public TikaProcess(String javaPath, String tikaDistPath, int tikaMaxHeapSizeMb) throws IOException {
     this.contentInPort = findRandomOpenPortOnAllLocalInterfaces();
     this.metadataOutPort = findRandomOpenPortOnAllLocalInterfaces();
     this.contentOutPort = findRandomOpenPortOnAllLocalInterfaces();
     command = new ArrayList<>();
-    command.add("java");
+    command.add(javaPath == null || javaPath.trim().length() == 0 ? CURRENT_JAVA_BINARY : javaPath);
     if (tikaMaxHeapSizeMb > 0) {
       command.add("-Xmx" + tikaMaxHeapSizeMb + "m");
     }
@@ -52,6 +62,7 @@ public class TikaProcess {
     command.add(String.valueOf(contentInPort));
     command.add(String.valueOf(metadataOutPort));
     command.add(String.valueOf(contentOutPort));
+    propertiesFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-fork-" + contentInPort + ".properties";
     try {
       process = new ProcessBuilder(command)
         .inheritIO()
@@ -65,11 +76,18 @@ public class TikaProcess {
   public void close() {
     process.destroy();
     LOG.info("Destroyed TikaProcess that had command: {}", command);
+    File propertiesFile = new File(propertiesFilePath);
+    if (propertiesFile.exists()) {
+      try {
+        propertiesFile.delete();
+      } catch (Exception e) {
+        LOG.debug("Ignoring the exception when file " + propertiesFilePath + " was deleted.");
+      }
+    }
   }
 
   public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInStream, OutputStream contentOutputStream) throws InterruptedException, ExecutionException {
     ExecutorService es = Executors.newFixedThreadPool(3);
-    String propertiesFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-fork-" + contentInPort + ".properties";
     Properties parseProperties = new Properties();
     parseProperties.setProperty("baseUri", baseUri);
     parseProperties.setProperty("contentType", contentType);

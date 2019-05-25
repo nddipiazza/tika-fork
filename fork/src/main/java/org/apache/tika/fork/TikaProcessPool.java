@@ -15,14 +15,15 @@ public class TikaProcessPool implements AutoCloseable {
 
   private ObjectPool pool;
 
-  public TikaProcessPool(String tikaDistPath,
+  public TikaProcessPool(String javaPath,
+                         String tikaDistPath,
                          int tikaMaxHeapSizeMb,
                          int numMinIdle,
                          int numMaxIdle,
                          int numMaxTotal,
                          long minEvictableIdleTimeMillis,
                          long softMinEvictableIdleTimeMillis) throws Exception {
-    pool = initializePool(tikaDistPath, tikaMaxHeapSizeMb, numMinIdle, numMaxIdle, numMaxTotal, minEvictableIdleTimeMillis, softMinEvictableIdleTimeMillis);
+    pool = initializePool(javaPath, tikaDistPath, tikaMaxHeapSizeMb, numMinIdle, numMaxIdle, numMaxTotal, minEvictableIdleTimeMillis, softMinEvictableIdleTimeMillis);
   }
 
   @Override
@@ -30,30 +31,25 @@ public class TikaProcessPool implements AutoCloseable {
     pool.close();
   }
 
-  public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInputStream, OutputStream contentOutputStream) {
-    TikaProcess process;
-
+  public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInputStream, OutputStream contentOutputStream) throws Exception {
+    TikaProcess process = (TikaProcess) pool.borrowObject();
     try {
-      process = (TikaProcess) pool.borrowObject();
-      try {
-        return process.parse(baseUri, contentType, extractHtmlLinks, contentInputStream, contentOutputStream);
-      } catch (Exception e) {
-        pool.invalidateObject(process);
-        // Do not return the object to the pool twice
-        process = null;
-        throw new RuntimeException("Could not parse content input stream", e);
-      } finally {
-        // Make sure the object is returned to the pool
-        if (null != process) {
-          pool.returnObject(process);
-        }
-      }
+      return process.parse(baseUri, contentType, extractHtmlLinks, contentInputStream, contentOutputStream);
     } catch (Exception e) {
-      throw new RuntimeException("Failed to borrow TikaProcess from the pool", e);
+      pool.invalidateObject(process);
+      // Do not return the object to the pool twice
+      process = null;
+      throw e;
+    } finally {
+      // Make sure the object is returned to the pool
+      if (null != process) {
+        pool.returnObject(process);
+      }
     }
   }
 
-  public static ObjectPool initializePool(String tikaDistDir,
+  public static ObjectPool initializePool(String javaPath,
+                                          String tikaDistDir,
                                           int tikaMaxHeapSizeMb,
                                           int numMinIdle,
                                           int numMaxIdle,
@@ -70,7 +66,7 @@ public class TikaProcessPool implements AutoCloseable {
     config.setSoftMinEvictableIdleTimeMillis(softMinEvictableIdleTimeMillis);
     config.setBlockWhenExhausted(true);
 
-    ObjectPool pool = new GenericObjectPool<TikaProcess>(new TikaProcessFactory(tikaDistDir, tikaMaxHeapSizeMb), config);
+    ObjectPool pool = new GenericObjectPool<TikaProcess>(new TikaProcessFactory(javaPath, tikaDistDir, tikaMaxHeapSizeMb), config);
 
     return pool;
   }
