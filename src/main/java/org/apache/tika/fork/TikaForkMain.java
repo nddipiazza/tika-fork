@@ -1,56 +1,112 @@
 package org.apache.tika.fork;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.tika.metadata.Metadata;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class TikaForkMain {
 
   public static final int PORT = 9876;
 
+  private File file;
+
   public static void main(String[] args) throws Exception {
-    String host = InetAddress.getLocalHost().getHostAddress();
+    TikaForkMain tikaForkMain = new TikaForkMain(args[0]);
+    tikaForkMain.parseFile();
+  }
 
-    File file = new File(args[0]);
-    // Get the size of the file
-    byte[] bytes = new byte[16 * 1024];
-    Socket socket = new Socket(host, PORT);
+  public TikaForkMain(String filePath) throws  Exception {
+    this.file = new File(filePath);
+  }
 
+  private void parseFile() throws InterruptedException, java.util.concurrent.ExecutionException {
+    ExecutorService es = Executors.newFixedThreadPool(3);
+    es.execute(() -> {
+      try {
+        writeFile(PORT, file);
+      } catch (Exception e) {
+        throw new RuntimeException("Could not write file", e);
+      }
+    });
+    Future<Metadata> metadataFuture = es.submit(() -> {
+      try {
+        return getMetadata(PORT + 1);
+      } catch (Exception e) {
+        throw new RuntimeException("Could not write file", e);
+      }
+    });
+    Future<byte[]> contentFuture = es.submit(() -> {
+      try {
+        return getContent(PORT + 2);
+      } catch (Exception e) {
+        throw new RuntimeException("Could not write file", e);
+      }
+    });
+
+    Metadata metadata = metadataFuture.get();
+    System.out.println("Read the metadata!");
+    System.out.println(metadata);
+
+    byte[] content = contentFuture.get();
+    System.out.println("Read the content!");
+    System.out.println(new String(content));
+
+    es.shutdown();
+  }
+
+  private void writeFile(int port, File file) throws Exception {
+    Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
     // First write the bytes to the tika parser
     try (InputStream in = new FileInputStream(file);
-         OutputStream out = socket.getOutputStream();
-         //InputStream metadataIn = socket.getInputStream();
+         OutputStream out = socket.getOutputStream()
     ) {
-      int count;
-      while ((count = in.read(bytes)) > 0) {
-        out.write(bytes,0, count);
-      }
+      long numChars;
+      do {
+        numChars = IOUtils.copy(in, out);
+      } while (numChars > 0);
       System.out.println("Done sending the bytes!");
-
-      // I want to be able to now read the resulting stream coming from the tika
-      // parse response. But when I enable this, it causes the tika input stream to
-      // never start.
-
-//      ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
-//      Metadata metadata = (Metadata)objectInputStream.readObject();
-//      System.out.println(metadata);
-
     } finally {
       socket.close();
     }
   }
 
-  private static Socket getSocket(String host) throws InterruptedException {
+  private Metadata getMetadata(int port) throws Exception {
+    Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
+    try (InputStream metadataIn = socket.getInputStream()) {
+      ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
+      return (Metadata)objectInputStream.readObject();
+    } finally {
+      socket.close();
+    }
+  }
+
+  private byte[] getContent(int port) throws Exception {
+    Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
+    try (InputStream contentIn = socket.getInputStream()) {
+      return IOUtils.toByteArray(contentIn);
+    } finally {
+      socket.close();
+    }
+  }
+
+  private static Socket getSocket(String host, int port) throws InterruptedException {
     Socket socket;
     int maxRetries = 20;
 
     while (true) {
       try {
-        socket = new Socket(host, PORT);
+        socket = new Socket(host, port);
         if (socket != null || --maxRetries < 0) {
           break;
         }

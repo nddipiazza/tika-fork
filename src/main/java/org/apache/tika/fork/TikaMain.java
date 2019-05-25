@@ -1,21 +1,27 @@
 package org.apache.tika.fork;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.tika.config.TikaConfig;
 import org.apache.tika.detect.DefaultDetector;
 import org.apache.tika.detect.Detector;
 import org.apache.tika.exception.TikaException;
+import org.apache.tika.io.IOUtils;
 import org.apache.tika.io.TikaInputStream;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.CompositeParser;
 import org.apache.tika.parser.ParseContext;
 import org.xml.sax.ContentHandler;
 
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class TikaMain {
 
@@ -40,7 +46,10 @@ public class TikaMain {
     return bufferSize;
   }
 
-  private static TikaParsingHandler getContentHandler(String mainUrl, Metadata metadata, boolean extractHtmlLinks) throws TikaException {
+  private static TikaParsingHandler getContentHandler(String mainUrl,
+                                                      Metadata metadata,
+                                                      OutputStream out,
+                                                      boolean extractHtmlLinks) throws TikaException {
     String sizeString = metadata.get(Metadata.CONTENT_LENGTH);
     final int bufferSize = getBufferSize(sizeString);
     String contentType = metadata.get(Metadata.CONTENT_TYPE);
@@ -48,8 +57,6 @@ public class TikaMain {
       contentType = "application/octet-stream";
     }
 
-    // TODO - i want to send this to the socket output stream
-    ByteArrayOutputStream out = new ByteArrayOutputStream(bufferSize);
     ContentHandler main = new TikaBodyContentHandler(out, TikaConstants.defaultOutputEncoding);
 
     TikaLinkContentHandler linksHandler = null;
@@ -59,39 +66,111 @@ public class TikaMain {
     return new TikaParsingHandler(mainUrl, out, main, linksHandler);
   }
 
-  public static void main(String[] args) throws Exception {
+  private String fileUrl;
+  private int port;
+  private String contentType;
 
-    System.out.println("args: " + args[0] + " " + args[1]);
+  public TikaMain(String fileUrl, int port, String contentType) {
+    this.fileUrl = fileUrl;
+    this.port = port;
+    this.contentType = contentType;
+  }
 
+  private void run() throws Exception {
+    ExecutorService es = Executors.newFixedThreadPool(3);
+
+    final PipedInputStream metadataInputStream = new PipedInputStream();
+    final PipedOutputStream metadataOutputStream = new PipedOutputStream();
+
+    metadataInputStream.connect(metadataOutputStream);
+
+    final PipedInputStream contentInputStream = new PipedInputStream();
+    final PipedOutputStream contentOutputStream = new PipedOutputStream();
+
+    contentInputStream.connect(contentOutputStream);
+
+    es.execute(() -> {
+      try {
+        parseFile(metadataOutputStream, contentOutputStream);
+      } catch (Exception e) {
+        throw new RuntimeException("Could not parse file", e);
+      }
+    });
+
+    Future metadataFuture = es.submit(() -> {
+      try {
+        writeMetadata(metadataInputStream);
+      } catch (Exception e) {
+        throw new RuntimeException("Could not write metadata", e);
+      }
+    });
+
+    Future contentFuture = es.submit(() -> {
+      try {
+        writeContent(contentInputStream);
+      } catch (Exception e) {
+        throw new RuntimeException("Could not write content", e);
+      }
+    });
+
+    metadataFuture.get();
+    contentFuture.get();
+
+    es.shutdown();
+  }
+
+  private void writeMetadata(InputStream inputStream) throws Exception {
+    try (ServerSocket serverSocket = new ServerSocket(port + 1);
+         Socket socket = serverSocket.accept();
+         OutputStream outputStream = socket.getOutputStream()
+    ) {
+      long numRead;
+      do {
+        numRead = IOUtils.copy(inputStream, outputStream);
+      } while (numRead > 0);
+    }
+  }
+
+  private void writeContent(InputStream inputStream) throws Exception {
+    try (ServerSocket serverSocket = new ServerSocket(port + 2);
+         Socket socket = serverSocket.accept();
+         OutputStream outputStream = socket.getOutputStream()
+    ) {
+      long numRead;
+      do {
+        numRead = IOUtils.copy(inputStream, outputStream);
+      } while (numRead > 0);
+    }
+  }
+
+  private void parseFile(OutputStream metadataOutputStream, OutputStream contentOutputStream) throws Exception {
     ParseContext context = new ParseContext();
     Detector detector = new DefaultDetector();
     TikaConfig config = TikaConfig.getDefaultConfig();
-    Optional<String> contentType = args.length > 2 ? Optional.of(args[2]) : Optional.empty();
     Metadata metadata = new Metadata();
-    if (contentType.isPresent()) {
-      metadata.set(Metadata.CONTENT_TYPE, contentType.get());
+    if (StringUtils.isNotBlank(contentType)) {
+      metadata.set(Metadata.CONTENT_TYPE, contentType);
     }
     CompositeParser compositeParser = new CompositeParser(config.getMediaTypeRegistry(), config.getParser());
-    try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(args[0]));
+    try (ServerSocket serverSocket = new ServerSocket(port);
          Socket socket = serverSocket.accept();
          InputStream inputStream = socket.getInputStream();
-         //ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-         ) {
+         ObjectOutputStream objectOutputStream = new ObjectOutputStream(metadataOutputStream);
+    ) {
       TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
 
       // I want to send the output stream of the socket here so that the body of
       // tika write to the socket output stream!
-      TikaParsingHandler contentHandler = getContentHandler(args[1], metadata, false);
+      TikaParsingHandler contentHandler = getContentHandler(fileUrl, metadata, contentOutputStream, false);
       compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
 
-      System.out.println("Got metadata! " + metadata);
-      System.out.println("Got content! " + contentHandler.getOutput().toString());
-
-      // I can't figure out how to get this to work. The stream freezes when parsing after
-      // i add it.
-
-//      objectOutputStream.writeObject(metadata);
-//      objectOutputStream.flush();
+      objectOutputStream.writeObject(metadata);
     }
+    contentOutputStream.close();
+  }
+
+  public static void main(String[] args) throws Exception {
+    TikaMain tikaMain = new TikaMain(args[0], Integer.parseInt(args[1]), args[2]);
+    tikaMain.run();
   }
 }

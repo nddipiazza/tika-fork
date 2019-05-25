@@ -6,7 +6,7 @@ import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 
 /**
  * Like Tika's {@link org.apache.tika.sax.TeeContentHandler} only it allows accessing the handlers.
@@ -15,10 +15,10 @@ public class TikaParsingHandler extends DefaultHandler {
   private final ContentHandler mainHandler;
   private final TikaLinkContentHandler linkHandler;
   private final ContentHandler[] handlers;
-  private final ByteArrayOutputStream output;
+  private final OutputStream output;
   private final String location;
 
-  public TikaParsingHandler(String location, ByteArrayOutputStream output, ContentHandler mainHandler, TikaLinkContentHandler linkHandler) {
+  public TikaParsingHandler(String location, OutputStream output, ContentHandler mainHandler, TikaLinkContentHandler linkHandler) {
     this.location = location;
     this.mainHandler = mainHandler;
     this.linkHandler = linkHandler;
@@ -42,7 +42,7 @@ public class TikaParsingHandler extends DefaultHandler {
     return linkHandler;
   }
 
-  public ByteArrayOutputStream getOutput() {
+  public OutputStream getOutput() {
     return output;
   }
 
