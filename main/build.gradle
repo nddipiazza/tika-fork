@@ -1,0 +1,37 @@
+plugins {
+    id "java"
+}
+
+group "org.apache.tika"
+version "1.0"
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+jar {
+    baseName "tika-main"
+}
+
+dependencies {
+    compile "com.fasterxml.jackson.core:jackson-databind:2.4.4"
+    compile "org.apache.tika:tika-core:${tikaVersion}"
+    compile "org.apache.tika:tika-parsers:${tikaVersion}"
+    testCompile group: "junit", name: "junit", version: "${junitVersion}"
+}
+
+task copyDependencies(type: Copy) {
+    from configurations.runtime
+    into new File(buildDir, "dist")
+}
+
+task copyJarToDist(type: Copy) {
+    from "$buildDir/libs/tika-main-${version}.jar"
+    into new File(buildDir, "dist")
+}
+
+task buildWithDependencies(dependsOn: [build, copyDependencies, copyJarToDist]) {
+
+}
