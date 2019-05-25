@@ -4,8 +4,6 @@ import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.tika.config.TikaConfig;
-import org.apache.tika.detect.DefaultDetector;
-import org.apache.tika.detect.Detector;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.io.IOUtils;
 import org.apache.tika.io.TikaInputStream;
@@ -36,38 +34,10 @@ import java.util.concurrent.Future;
 public class TikaMain {
   private static final Logger LOG = LoggerFactory.getLogger(TikaMain.class);
 
-  private static final int maxStackDepth = 20;
-  private static final int maxBufferSize = 1024 * 1024 * 10;
-  private static final int defaultBufferSize = 1024;
-
-  private static int getBufferSize(String sizeString) {
-    int bufferSize = defaultBufferSize;
-    if (sizeString != null && !sizeString.isEmpty()) {
-      try {
-        bufferSize = Integer.parseInt(sizeString);
-      } catch (Exception e) {
-        // ignore
-      }
-      if (bufferSize < 0) {
-        bufferSize = defaultBufferSize;
-      } else if (bufferSize > maxBufferSize) {
-        bufferSize = maxBufferSize;
-      }
-    }
-    return bufferSize;
-  }
-
   private static TikaParsingHandler getContentHandler(String mainUrl,
                                                       Metadata metadata,
                                                       OutputStream out,
                                                       boolean extractHtmlLinks) throws TikaException {
-    String sizeString = metadata.get(Metadata.CONTENT_LENGTH);
-    final int bufferSize = getBufferSize(sizeString);
-    String contentType = metadata.get(Metadata.CONTENT_TYPE);
-    if (contentType == null) {
-      contentType = "application/octet-stream";
-    }
-
     ContentHandler main = new TikaBodyContentHandler(out, TikaConstants.defaultOutputEncoding);
 
     TikaLinkContentHandler linksHandler = null;
@@ -207,7 +177,6 @@ public class TikaMain {
 
   private void parseFile(OutputStream metadataOutputStream, OutputStream contentOutputStream) throws Exception {
     ParseContext context = new ParseContext();
-    Detector detector = new DefaultDetector();
     TikaConfig config = TikaConfig.getDefaultConfig();
     Metadata metadata = new Metadata();
     CompositeParser compositeParser = new CompositeParser(config.getMediaTypeRegistry(), config.getParser());
@@ -215,7 +184,6 @@ public class TikaMain {
     try (Socket socket = contentInServerSocket.accept();
          InputStream inputStream = socket.getInputStream();
          ObjectOutputStream objectOutputStream = new ObjectOutputStream(metadataOutputStream)) {
-
 
 
       Properties parseProperties = new Properties();

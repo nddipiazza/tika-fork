@@ -32,6 +32,7 @@ public class TikaProcess {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcess.class);
 
   static private final String CURRENT_JAVA_BINARY;
+
   static {
     if (System.getProperty("os.name").startsWith("Win")) {
       CURRENT_JAVA_BINARY = System.getProperties().getProperty("java.home") + File.separator + "bin" + File.separator + "java.exe";
