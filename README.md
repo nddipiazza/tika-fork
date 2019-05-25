@@ -1,21 +1,12 @@
 # tika-fork
 
-Socket programming code challenge.
+Utility that allows you to run Tika as a forked JVM to minimize memory issues.
 
-This utility for handling tika in forked JVMs to avoid memory issues in the current JVM when parsing files with Apache Tika.
+It is a common issue when dealing with Tika to have parses that cause your entire JVM to crash due to out-of-memory condition.
 
-First run the server:
+This program attempts to deal with this problem, and a couple other things:
 
-```
-./gradlew -PmainClass=org.apache.tika.fork.TikaMain execute --args "9876 http://unec.edu.az/application/uploads/2014/12/pdf-sample.pdf application/pdf"
-```
-
-Then run the client:
-
-```
-./gradlew -PmainClass=org.apache.tika.fork.TikaForkMain execute --args "/home/ndipiazza/Downloads/pdf-sample.pdf"
-```
-
-As is, it will parse the file you send in, and it will `System.out.println` the output. But what we want this to do is to send the resulting Metadata and Body contents to the socket `OutputStream`.
-
-Make the changes necessary to send the `Metadata` and contents of the output stream.
+* Launches a pool of forked JVMs that are all limited by the amount of memory they can use.
+* Uses sockets (not HTTP) to send a stream of your content to the Tika parse, and to receive back metadata and parsed content.
+* Uses commons-pool to provide fine-grained control the pool of the forked Tika JVMs.
+* Provides a very simple "abortAfterMs" parameter to the parse that will throw a TimeoutException if too much time is taken. This will result in the forked JVM to be aborted. This is useful in the situations where the JVM went into GC hell eating tons of CPU and never returning.
