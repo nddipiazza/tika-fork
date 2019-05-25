@@ -1,6 +1,6 @@
 package org.apache.tika.main;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.tika.config.TikaConfig;
 import org.apache.tika.detect.DefaultDetector;
 import org.apache.tika.detect.Detector;
@@ -14,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.ContentHandler;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
@@ -21,6 +23,9 @@ import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -69,9 +74,6 @@ public class TikaMain {
     return new TikaParsingHandler(mainUrl, out, main, linksHandler);
   }
 
-  // TODO - get these from the contentIn stream
-  private String fileUrl = "http://unec.edu.az/application/uploads/2014/12/pdf-sample.pdf";
-  private String contentType = "application/pdf";
   private int contentInPort;
   private int metadataOutPort;
   private int contentOutPort;
@@ -156,20 +158,33 @@ public class TikaMain {
     Detector detector = new DefaultDetector();
     TikaConfig config = TikaConfig.getDefaultConfig();
     Metadata metadata = new Metadata();
-    if (StringUtils.isNotBlank(contentType)) {
-      metadata.set(Metadata.CONTENT_TYPE, contentType);
-    }
     CompositeParser compositeParser = new CompositeParser(config.getMediaTypeRegistry(), config.getParser());
     try (ServerSocket serverSocket = new ServerSocket(contentInPort);
          Socket socket = serverSocket.accept();
          InputStream inputStream = socket.getInputStream();
-         ObjectOutputStream objectOutputStream = new ObjectOutputStream(metadataOutputStream);
-    ) {
+         ObjectOutputStream objectOutputStream = new ObjectOutputStream(metadataOutputStream)) {
+
+      Properties parseProperties = new Properties();
+      String propertiesFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-fork-" + contentInPort + ".properties";
+      if (!Files.exists(Paths.get(propertiesFilePath))) {
+        throw new Exception("Cannot find property file: " + propertiesFilePath);
+      }
+      parseProperties.load(new FileInputStream(propertiesFilePath));
+
+      String baseUri = parseProperties.getProperty("baseUri");
+      if (baseUri == null) {
+        throw new Exception("Missing property baseUri from the properties file " + propertiesFilePath);
+      }
+
+      String contentType = parseProperties.getProperty("contentType");
+      if (StringUtils.isNotBlank(contentType)) {
+        metadata.set(Metadata.CONTENT_TYPE, contentType);
+      }
+
+      boolean extractHtmlLinks = Boolean.parseBoolean(parseProperties.getProperty("extractHtmlLinks", "false"));
       TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
 
-      // I want to send the output stream of the socket here so that the body of
-      // tika write to the socket output stream!
-      TikaParsingHandler contentHandler = getContentHandler(fileUrl, metadata, contentOutputStream, false);
+      TikaParsingHandler contentHandler = getContentHandler(baseUri, metadata, contentOutputStream, extractHtmlLinks);
       compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
 
       objectOutputStream.writeObject(metadata);

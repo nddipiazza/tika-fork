@@ -15,8 +15,14 @@ public class TikaProcessPool implements AutoCloseable {
 
   private ObjectPool pool;
 
-  public TikaProcessPool(String tikaDistPath, int numMinIdle, int numMaxIdle, int numMaxTotal) throws Exception {
-    pool = initializePool(numMinIdle, numMaxIdle, numMaxTotal, tikaDistPath);
+  public TikaProcessPool(String tikaDistPath,
+                         int tikaMaxHeapSizeMb,
+                         int numMinIdle,
+                         int numMaxIdle,
+                         int numMaxTotal,
+                         long minEvictableIdleTimeMillis,
+                         long softMinEvictableIdleTimeMillis) throws Exception {
+    pool = initializePool(tikaDistPath, tikaMaxHeapSizeMb, numMinIdle, numMaxIdle, numMaxTotal, minEvictableIdleTimeMillis, softMinEvictableIdleTimeMillis);
   }
 
   @Override
@@ -24,13 +30,13 @@ public class TikaProcessPool implements AutoCloseable {
     pool.close();
   }
 
-  public Metadata parse(InputStream contentInputStream, OutputStream contentOutputStream) {
+  public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInputStream, OutputStream contentOutputStream) {
     TikaProcess process;
 
     try {
       process = (TikaProcess) pool.borrowObject();
       try {
-        return process.parse(contentInputStream, contentOutputStream);
+        return process.parse(baseUri, contentType, extractHtmlLinks, contentInputStream, contentOutputStream);
       } catch (Exception e) {
         pool.invalidateObject(process);
         // Do not return the object to the pool twice
@@ -47,16 +53,24 @@ public class TikaProcessPool implements AutoCloseable {
     }
   }
 
-  public static ObjectPool initializePool(int numMinIdle, int numMaxIdle, int numMaxTotal, String tikaDistDir) throws Exception {
+  public static ObjectPool initializePool(String tikaDistDir,
+                                          int tikaMaxHeapSizeMb,
+                                          int numMinIdle,
+                                          int numMaxIdle,
+                                          int numMaxTotal,
+                                          long minEvictableIdleTimeMillis,
+                                          long softMinEvictableIdleTimeMillis) throws Exception {
     // Note: In the default implementation of Object Pool, objects are not created at start-up, but rather are created whenever the first call
     // to the pool.borrowObject() is made. This object is then cached for future use.
     GenericObjectPoolConfig config = new GenericObjectPoolConfig();
     config.setMinIdle(numMinIdle);
     config.setMaxIdle(numMaxIdle);
     config.setMaxTotal(numMaxTotal);
+    config.setMinEvictableIdleTimeMillis(minEvictableIdleTimeMillis);
+    config.setSoftMinEvictableIdleTimeMillis(softMinEvictableIdleTimeMillis);
     config.setBlockWhenExhausted(true);
 
-    ObjectPool pool = new GenericObjectPool<TikaProcess>(new TikaProcessFactory(tikaDistDir), config);
+    ObjectPool pool = new GenericObjectPool<TikaProcess>(new TikaProcessFactory(tikaDistDir, tikaMaxHeapSizeMb), config);
 
     return pool;
   }

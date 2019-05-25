@@ -11,6 +11,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class TikaProcessTest {
@@ -26,14 +28,22 @@ public class TikaProcessTest {
   @Test
   public void testExternalTika() throws Exception {
     AtomicBoolean failTest = new AtomicBoolean(false);
-    try (TikaProcessPool tikaProcessPool = new TikaProcessPool(tikaDistPath, 1, 4, 4)) {
+    try (TikaProcessPool tikaProcessPool = new TikaProcessPool(tikaDistPath,
+      200,
+      1,
+      10,
+      10,
+      -1,
+      -1)) {
       Runnable r = () -> {
         try {
-          int numFiles = 50;
+          int numFiles = 100;
           for (int i = 0; i < numFiles; ++i) {
             ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
-            try (FileInputStream fis = new FileInputStream("test-files" + File.separator + "pdf-sample.pdf")) {
-              Metadata metadata = tikaProcessPool.parse(fis, contentOutputStream);
+            String path = "test-files" + File.separator + "pdf-sample.pdf";
+            String contentType = "application/pdf";
+            try (FileInputStream fis = new FileInputStream(path)) {
+              Metadata metadata = tikaProcessPool.parse(path, contentType, false, fis, contentOutputStream);
               Assert.assertEquals(39, metadata.size());
               LOG.info("Metadata from the tika process: {}", metadata);
               LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
@@ -44,17 +54,15 @@ public class TikaProcessTest {
           failTest.set(true);
         }
       };
-      Thread t1 = new Thread(r);
-      Thread t2 = new Thread(r);
-      Thread t3 = new Thread(r);
-
-      t1.start();
-      t2.start();
-      t3.start();
-
-      t1.join();
-      t2.join();
-      t3.join();
+      List<Thread> ts = new ArrayList<>();
+      for (int i=0; i<10; ++i) {
+        Thread t = new Thread(r);
+        t.start();
+        ts.add(t);
+      }
+      for (Thread t : ts) {
+        t.join();
+      }
     }
     Assert.assertFalse(failTest.get());
   }

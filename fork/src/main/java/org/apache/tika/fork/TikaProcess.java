@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -15,6 +16,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,7 +25,7 @@ import java.util.concurrent.Future;
 public class TikaProcess {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcess.class);
 
-  private int dataInPort;
+  private int contentInPort;
   private int metadataOutPort;
   private int contentOutPort;
   private Process process;
@@ -35,16 +37,19 @@ public class TikaProcess {
     }
   }
 
-  public TikaProcess(String tikaDistPath) throws IOException {
-    this.dataInPort = findRandomOpenPortOnAllLocalInterfaces();
+  public TikaProcess(String tikaDistPath, int tikaMaxHeapSizeMb) throws IOException {
+    this.contentInPort = findRandomOpenPortOnAllLocalInterfaces();
     this.metadataOutPort = findRandomOpenPortOnAllLocalInterfaces();
     this.contentOutPort = findRandomOpenPortOnAllLocalInterfaces();
     command = new ArrayList<>();
     command.add("java");
+    if (tikaMaxHeapSizeMb > 0) {
+      command.add("-Xmx" + tikaMaxHeapSizeMb + "m");
+    }
     command.add("-cp");
     command.add(tikaDistPath + File.separator + "*");
     command.add("org.apache.tika.main.TikaMain");
-    command.add(String.valueOf(dataInPort));
+    command.add(String.valueOf(contentInPort));
     command.add(String.valueOf(metadataOutPort));
     command.add(String.valueOf(contentOutPort));
     try {
@@ -62,11 +67,21 @@ public class TikaProcess {
     LOG.info("Destroyed TikaProcess that had command: {}", command);
   }
 
-  public Metadata parse(InputStream contentInStream, OutputStream contentOutputStream) throws InterruptedException, ExecutionException {
+  public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInStream, OutputStream contentOutputStream) throws InterruptedException, ExecutionException {
     ExecutorService es = Executors.newFixedThreadPool(3);
+    String propertiesFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-fork-" + contentInPort + ".properties";
+    Properties parseProperties = new Properties();
+    parseProperties.setProperty("baseUri", baseUri);
+    parseProperties.setProperty("contentType", contentType);
+    parseProperties.setProperty("extractHtmlLinks", String.valueOf(extractHtmlLinks));
+    try (FileOutputStream fis = new FileOutputStream(propertiesFilePath)) {
+      parseProperties.store(fis, null);
+    } catch (IOException e) {
+      throw new RuntimeException("Could not write to properties file: " + propertiesFilePath, e);
+    }
     es.execute(() -> {
       try {
-        writeContent(dataInPort, contentInStream);
+        writeContent(contentInPort, contentInStream);
       } catch (Exception e) {
         throw new RuntimeException("Could not write file", e);
       }
