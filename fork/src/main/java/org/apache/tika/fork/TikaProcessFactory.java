@@ -3,10 +3,13 @@ package org.apache.tika.fork;
 import org.apache.commons.pool2.BasePooledObjectFactory;
 import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 public class TikaProcessFactory extends BasePooledObjectFactory<TikaProcess> {
+  private static final Logger LOG = LoggerFactory.getLogger(TikaProcessFactory.class);
 
   private String tikaDistPath;
 
@@ -16,8 +19,6 @@ public class TikaProcessFactory extends BasePooledObjectFactory<TikaProcess> {
 
   @Override
   public TikaProcess create() {
-    //Put in your logic for creating your expensive object - e.g. JDBC Connection, MQTT Connection, etc.
-    //here for the sake of simplicity, we return a custom pooled object of a custom class called MyObject.
     try {
       return new TikaProcess(tikaDistPath);
     } catch (IOException e) {
@@ -36,11 +37,6 @@ public class TikaProcessFactory extends BasePooledObjectFactory<TikaProcess> {
 
   @Override
   public void destroyObject(PooledObject<TikaProcess> p) {
-    //Destroys an instance no longer needed by the pool.
-    System.out.println("destroying");
     p.getObject().close();
   }
-
-  // for all other methods, the no-op implementation
-  // in BasePooledObjectFactory will suffice
 }

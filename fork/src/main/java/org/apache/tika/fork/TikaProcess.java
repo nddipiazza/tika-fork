@@ -23,11 +23,11 @@ import java.util.concurrent.Future;
 public class TikaProcess {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcess.class);
 
-  private String tikaDistPath;
   private int dataInPort;
   private int metadataOutPort;
   private int contentOutPort;
   private Process process;
+  private List<String> command;
 
   public static Integer findRandomOpenPortOnAllLocalInterfaces() throws IOException {
     try (ServerSocket socket = new ServerSocket(0)) {
@@ -36,11 +36,10 @@ public class TikaProcess {
   }
 
   public TikaProcess(String tikaDistPath) throws IOException {
-    this.tikaDistPath = tikaDistPath;
     this.dataInPort = findRandomOpenPortOnAllLocalInterfaces();
     this.metadataOutPort = findRandomOpenPortOnAllLocalInterfaces();
     this.contentOutPort = findRandomOpenPortOnAllLocalInterfaces();
-    List<String> command = new ArrayList<>();
+    command = new ArrayList<>();
     command.add("java");
     command.add("-cp");
     command.add(tikaDistPath + File.separator + "*");
@@ -60,9 +59,10 @@ public class TikaProcess {
 
   public void close() {
     process.destroy();
+    LOG.info("Destroyed TikaProcess that had command: {}", command);
   }
 
-  public Metadata parse(InputStream contentInStream) throws InterruptedException, ExecutionException {
+  public Metadata parse(InputStream contentInStream, OutputStream contentOutputStream) throws InterruptedException, ExecutionException {
     ExecutorService es = Executors.newFixedThreadPool(3);
     es.execute(() -> {
       try {
@@ -78,17 +78,15 @@ public class TikaProcess {
         throw new RuntimeException("Could not write metadata to metadataOutPort", e);
       }
     });
-    Future<byte[]> contentFuture = es.submit(() -> {
+    Future contentFuture = es.submit(() -> {
       try {
-        return getContent(contentOutPort);
+        getContent(contentOutPort, contentOutputStream);
       } catch (Exception e) {
         throw new RuntimeException("Could not write content to contentOutPort", e);
       }
     });
 
-    byte[] content = contentFuture.get();
-    LOG.info("Read the content - {}", new String(content));
-
+    contentFuture.get();
     Metadata metadataResult = metadataFuture.get();
 
     es.shutdown();
@@ -103,7 +101,6 @@ public class TikaProcess {
       do {
         numChars = IOUtils.copy(contentInStream, out);
       } while (numChars > 0);
-      LOG.info("Done sending the bytes!");
     } finally {
       socket.close();
     }
@@ -119,10 +116,13 @@ public class TikaProcess {
     }
   }
 
-  private byte[] getContent(int port) throws Exception {
+  private void getContent(int port, OutputStream contentOutputStream) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
-    try (InputStream contentIn = socket.getInputStream()) {
-      return IOUtils.toByteArray(contentIn);
+    try (InputStream in = socket.getInputStream()) {
+      long numChars;
+      do {
+        numChars = IOUtils.copy(in, contentOutputStream);
+      } while (numChars > 0);
     } finally {
       socket.close();
     }

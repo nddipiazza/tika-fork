@@ -3,20 +3,20 @@ package org.apache.tika.fork;
 import org.apache.commons.pool2.ObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import org.apache.tika.metadata.Metadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 
 public class TikaProcessPool implements AutoCloseable {
-  private String tikaDistPath;
-  private int numProcesses;
+  private static final Logger LOG = LoggerFactory.getLogger(TikaProcessPool.class);
+
   private ObjectPool pool;
 
-  public TikaProcessPool(String tikaDistPath, int numProcesses) throws Exception {
-    this.numProcesses = numProcesses;
-    this.tikaDistPath = tikaDistPath;
-
-    //Create the Object pool.
-    pool = initializePool(numProcesses, tikaDistPath);
+  public TikaProcessPool(String tikaDistPath, int numMinIdle, int numMaxIdle, int numMaxTotal) throws Exception {
+    pool = initializePool(numMinIdle, numMaxIdle, numMaxTotal, tikaDistPath);
   }
 
   @Override
@@ -24,18 +24,19 @@ public class TikaProcessPool implements AutoCloseable {
     pool.close();
   }
 
-  public void parse(InputStream contentInputStream) {
+  public Metadata parse(InputStream contentInputStream, OutputStream contentOutputStream) {
     TikaProcess process;
 
     try {
       process = (TikaProcess) pool.borrowObject();
       try {
-        process.parse(contentInputStream);
+        return process.parse(contentInputStream, contentOutputStream);
       } catch (Exception e) {
         // invalidate the object
         pool.invalidateObject(process);
         // do not return the object to the pool twice
         process = null;
+        throw new RuntimeException("Could not parse content input stream", e);
       } finally {
         // make sure the object is returned to the pool
         if (null != process) {
@@ -48,14 +49,15 @@ public class TikaProcessPool implements AutoCloseable {
   }
 
   //A helper method to initialize the pool using the config and object-factory.
-  public static ObjectPool initializePool(int numMaxTotal, String tikaDistDir) throws Exception {
-    // We confugure the pool using a GenericObjectPoolConfig
+  public static ObjectPool initializePool(int numMinIdle, int numMaxIdle, int numMaxTotal, String tikaDistDir) throws Exception {
+    // We configure the pool using a GenericObjectPoolConfig
     //Note: In the default implementation of Object Pool, objects are not created at start-up, but rather are created whenever the first call
     //to the pool.borrowObject() is made. This object is then cached for future use.
     //It is recommended to put these settings in a properties file.
     GenericObjectPoolConfig config = new GenericObjectPoolConfig();
+    config.setMinIdle(numMinIdle);
+    config.setMaxIdle(numMaxIdle);
     config.setMaxTotal(numMaxTotal);
-    config.setMinIdle(numMaxTotal);
     config.setBlockWhenExhausted(true);
 
     //We use the GenericObjectPool implementation of Object Pool as this suffices for most needs.
