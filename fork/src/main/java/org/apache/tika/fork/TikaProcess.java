@@ -101,21 +101,21 @@ public class TikaProcess {
       try {
         writeContent(contentInPort, contentInStream);
       } catch (Exception e) {
-        throw new RuntimeException("Could not write file", e);
+        throw new RuntimeException("Failed to send content stream to forked Tika parser JVM", e);
       }
     });
     Future<Metadata> metadataFuture = es.submit(() -> {
       try {
         return getMetadata(metadataOutPort);
       } catch (Exception e) {
-        throw new RuntimeException("Could not write metadata to metadataOutPort", e);
+        throw new RuntimeException("Failed to read metadata from forked Tika parser JVM", e);
       }
     });
     Future contentFuture = es.submit(() -> {
       try {
         getContent(contentOutPort, contentOutputStream);
       } catch (Exception e) {
-        throw new RuntimeException("Could not write content to contentOutPort", e);
+        throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
       }
     });
 
