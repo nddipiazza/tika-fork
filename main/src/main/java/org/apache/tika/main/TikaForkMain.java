@@ -1,4 +1,4 @@
-package org.apache.tika.fork;
+package org.apache.tika.main;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.tika.metadata.Metadata;
