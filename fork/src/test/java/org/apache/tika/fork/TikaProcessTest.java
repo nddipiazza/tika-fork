@@ -34,8 +34,10 @@ public class TikaProcessTest {
             ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
             try (FileInputStream fis = new FileInputStream("test-files" + File.separator + "pdf-sample.pdf")) {
               Metadata metadata = tikaProcessPool.parse(fis, contentOutputStream);
+              Assert.assertEquals(39, metadata.size());
               LOG.info("Metadata from the tika process: {}", metadata);
               LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
+              Assert.assertEquals(1069, contentOutputStream.toString("UTF-8").length());
             }
           }
         } catch (IOException e) {
