@@ -14,7 +14,6 @@ import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class TikaProcessTest {
@@ -53,7 +52,6 @@ public class TikaProcessTest {
   private void doMultiThreadedParse(TikaProcessPool tikaProcessPool) throws Exception {
     int numFiles = 50;
     AtomicInteger numParsed = new AtomicInteger(0);
-    AtomicBoolean failTest = new AtomicBoolean(false);
     Runnable r = () -> {
       try {
         try {
@@ -110,7 +108,6 @@ public class TikaProcessTest {
     if (exc != null) {
       throw exc;
     }
-    Assert.assertFalse("Unxpected exception happened during parse", failTest.get());
     Assert.assertEquals(numFiles * numThreads, numParsed.get());
   }
 
