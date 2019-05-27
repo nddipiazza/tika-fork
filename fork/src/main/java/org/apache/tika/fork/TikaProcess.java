@@ -41,16 +41,27 @@ public class TikaProcess {
     }
   }
 
+  static private final long WAIT_FOR_PORTS_FOR_MAX_MS = Long.parseLong(System.getProperty("org.apache.tika.ports.timeout.ms", String.valueOf(2 * 60 * 60 * 1000)));
+
   private int contentInPort;
   private int metadataOutPort;
   private int contentOutPort;
   private Process process;
   private List<String> command;
   private String runUuid = UUID.randomUUID().toString();
-  private String propertiesFilePath;
+  private String parseConfigPropertiesFilePath;
+  private String parseContextPropertiesFilePath;
   private String portsFilePath;
 
-  public TikaProcess(String javaPath, String tikaDistPath, int tikaMaxHeapSizeMb) throws IOException {
+  public TikaProcess(String javaPath,
+                     String configDirectoryPath,
+                     String tikaDistPath,
+                     int tikaMaxHeapSizeMb,
+                     Properties parseProperties) {
+    parseConfigPropertiesFilePath = configDirectoryPath + File.separator + "tikafork-config-" + runUuid + ".properties";
+    parseContextPropertiesFilePath = configDirectoryPath + File.separator + "tikafork-context-" + runUuid + ".properties";
+    portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + runUuid + ".properties";
+
     command = new ArrayList<>();
     command.add(javaPath == null || javaPath.trim().length() == 0 ? CURRENT_JAVA_BINARY : javaPath);
     if (tikaMaxHeapSizeMb > 0) {
@@ -59,18 +70,29 @@ public class TikaProcess {
     command.add("-cp");
     command.add(tikaDistPath + File.separator + "*");
     command.add("org.apache.tika.main.TikaMain");
-    command.add(runUuid);
-    String parentFolder = System.getProperty("java.io.tmpdir") + File.separator;
-    propertiesFilePath = parentFolder + "tika-fork-" + runUuid + ".properties";
-    portsFilePath = parentFolder + "tika-ports-" + runUuid + ".properties";
+
+    Properties sendParseProperties = (Properties)parseProperties.clone();
+    sendParseProperties.setProperty("runUuid", runUuid);
+    try (FileOutputStream fos = new FileOutputStream(parseConfigPropertiesFilePath)) {
+      sendParseProperties.store(fos, null);
+    } catch (IOException e) {
+      throw new RuntimeException("Couldn't save the parse properties file", e);
+    }
+
+    command.add(parseConfigPropertiesFilePath);
+    if (configDirectoryPath != null && configDirectoryPath.trim().length() > 0) {
+      command.add(configDirectoryPath);
+    }
     try {
       process = new ProcessBuilder(command)
         .inheritIO()
         .start();
       LOG.info("Started command: {}", command);
       List<Integer> ports = new ArrayList<>();
-      int maxAttempts = 100;
-      while (--maxAttempts > 0 && ports.size() < 3) {
+
+      // Wait for the sockets file for up to WAIT_FOR_PORTS_FOR_MAX_MS
+      Instant stopWaitingOn = Instant.now().plus(Duration.ofMillis(WAIT_FOR_PORTS_FOR_MAX_MS));
+      while (Instant.now().isBefore(stopWaitingOn) && ports.size() < 3) {
         try (FileReader fr = new FileReader(new File(portsFilePath));
              BufferedReader br = new BufferedReader(fr)) {
           ports.clear();
@@ -82,6 +104,9 @@ public class TikaProcess {
           LOG.debug("Ignoring an exception getting the ports for Tika Process " + runUuid);
         }
         if (ports.size() < 3) {
+          if (!process.isAlive()) {
+            throw new RuntimeException("Process died with exit code " + process.exitValue());
+          }
           try {
             Thread.sleep(50L);
           } catch (InterruptedException e) {
@@ -90,7 +115,8 @@ public class TikaProcess {
         }
       }
       if (ports.size() < 3) {
-        throw new RuntimeException("Could not get the ports from Tika process " + runUuid);
+        throw new RuntimeException("Could not get the ports from Tika process " + runUuid +
+          " after " + WAIT_FOR_PORTS_FOR_MAX_MS + " ms. This timeout is specified by the org.apache.tika.ports.timeout.ms system property.");
       }
       contentInPort = ports.get(0);
       metadataOutPort = ports.get(1);
@@ -103,31 +129,37 @@ public class TikaProcess {
   public void close() {
     process.destroy();
     LOG.info("Destroyed TikaProcess that had command: {}", command);
-    File propertiesFile = new File(propertiesFilePath);
-    if (propertiesFile.exists()) {
+    File parseContextPropertiesFile = new File(parseContextPropertiesFilePath);
+    if (parseContextPropertiesFile.exists()) {
       try {
-        propertiesFile.delete();
+        parseContextPropertiesFile.delete();
       } catch (Exception e) {
-        LOG.debug("Ignoring the exception when file " + propertiesFilePath + " was deleted.");
+        LOG.debug("Ignoring the exception when file " + parseContextPropertiesFilePath + " was deleted.");
+      }
+    }
+    File parseConfigPropertiesFile = new File(parseConfigPropertiesFilePath);
+    if (parseConfigPropertiesFile.exists()) {
+      try {
+        parseConfigPropertiesFile.delete();
+      } catch (Exception e) {
+        LOG.debug("Ignoring the exception when file " + parseConfigPropertiesFilePath + " was deleted.");
       }
     }
   }
 
   public Metadata parse(String baseUri,
                         String contentType,
-                        boolean extractHtmlLinks,
                         InputStream contentInStream,
                         OutputStream contentOutputStream,
                         long abortAfterMs) throws InterruptedException, ExecutionException, TimeoutException {
     ExecutorService es = Executors.newFixedThreadPool(3);
-    Properties parseProperties = new Properties();
-    parseProperties.setProperty("baseUri", baseUri);
-    parseProperties.setProperty("contentType", contentType);
-    parseProperties.setProperty("extractHtmlLinks", String.valueOf(extractHtmlLinks));
-    try (FileOutputStream fis = new FileOutputStream(propertiesFilePath)) {
-      parseProperties.store(fis, null);
+    Properties parseContextProperties = new Properties();
+    parseContextProperties.setProperty("baseUri", baseUri);
+    parseContextProperties.setProperty("contentType", contentType);
+    try (FileOutputStream fis = new FileOutputStream(parseContextPropertiesFilePath)) {
+      parseContextProperties.store(fis, null);
     } catch (IOException e) {
-      throw new RuntimeException("Could not write to properties file: " + propertiesFilePath, e);
+      throw new RuntimeException("Could not write to properties file: " + parseContextPropertiesFilePath, e);
     }
     es.execute(() -> {
       try {

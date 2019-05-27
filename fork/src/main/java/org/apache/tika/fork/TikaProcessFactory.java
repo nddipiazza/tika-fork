@@ -6,28 +6,28 @@ import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
+import java.util.Properties;
 
 public class TikaProcessFactory extends BasePooledObjectFactory<TikaProcess> {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcessFactory.class);
 
   private String tikaDistPath;
   private String javaPath;
+  private String configDirectoryPath;
   private int tikaMaxHeapSizeMb;
+  private Properties parseProperties;
 
-  public TikaProcessFactory(String javaPath, String tikaDistPath, int tikaMaxHeapSizeMb) {
+  public TikaProcessFactory(String javaPath, String configDirectoryPath, String tikaDistPath, int tikaMaxHeapSizeMb, Properties parseProperties) {
     this.tikaDistPath = tikaDistPath;
     this.tikaMaxHeapSizeMb = tikaMaxHeapSizeMb;
     this.javaPath = javaPath;
+    this.parseProperties = parseProperties;
+    this.configDirectoryPath = configDirectoryPath;
   }
 
   @Override
   public TikaProcess create() {
-    try {
-      return new TikaProcess(javaPath, tikaDistPath, tikaMaxHeapSizeMb);
-    } catch (IOException e) {
-      throw new RuntimeException("Could not create tika process", e);
-    }
+    return new TikaProcess(javaPath, configDirectoryPath, tikaDistPath, tikaMaxHeapSizeMb, parseProperties);
   }
 
   /**

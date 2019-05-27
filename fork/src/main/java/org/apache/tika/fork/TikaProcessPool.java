@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Properties;
 
 public class TikaProcessPool implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcessPool.class);
@@ -16,14 +17,16 @@ public class TikaProcessPool implements AutoCloseable {
   private ObjectPool pool;
 
   public TikaProcessPool(String javaPath,
+                         String configDirectoryPath,
                          String tikaDistPath,
                          int tikaMaxHeapSizeMb,
+                         Properties parseProperties,
                          int numMinIdle,
                          int numMaxIdle,
                          int numMaxTotal,
                          long minEvictableIdleTimeMillis,
                          long softMinEvictableIdleTimeMillis) throws Exception {
-    pool = initializePool(javaPath, tikaDistPath, tikaMaxHeapSizeMb, numMinIdle, numMaxIdle, numMaxTotal, minEvictableIdleTimeMillis, softMinEvictableIdleTimeMillis);
+    pool = initializePool(javaPath, configDirectoryPath, tikaDistPath, tikaMaxHeapSizeMb, parseProperties, numMinIdle, numMaxIdle, numMaxTotal, minEvictableIdleTimeMillis, softMinEvictableIdleTimeMillis);
   }
 
   @Override
@@ -31,10 +34,10 @@ public class TikaProcessPool implements AutoCloseable {
     pool.close();
   }
 
-  public Metadata parse(String baseUri, String contentType, boolean extractHtmlLinks, InputStream contentInputStream, OutputStream contentOutputStream, long abortAfterMs) throws Exception {
+  public Metadata parse(String baseUri, String contentType, InputStream contentInputStream, OutputStream contentOutputStream, long abortAfterMs) throws Exception {
     TikaProcess process = (TikaProcess) pool.borrowObject();
     try {
-      return process.parse(baseUri, contentType, extractHtmlLinks, contentInputStream, contentOutputStream, abortAfterMs);
+      return process.parse(baseUri, contentType, contentInputStream, contentOutputStream, abortAfterMs);
     } catch (Exception e) {
       pool.invalidateObject(process);
       // Do not return the object to the pool twice
@@ -49,8 +52,10 @@ public class TikaProcessPool implements AutoCloseable {
   }
 
   public static ObjectPool initializePool(String javaPath,
+                                          String configDirectoryPath,
                                           String tikaDistDir,
                                           int tikaMaxHeapSizeMb,
+                                          Properties parseProperties,
                                           int numMinIdle,
                                           int numMaxIdle,
                                           int numMaxTotal,
@@ -66,7 +71,11 @@ public class TikaProcessPool implements AutoCloseable {
     config.setSoftMinEvictableIdleTimeMillis(softMinEvictableIdleTimeMillis);
     config.setBlockWhenExhausted(true);
 
-    ObjectPool pool = new GenericObjectPool<TikaProcess>(new TikaProcessFactory(javaPath, tikaDistDir, tikaMaxHeapSizeMb), config);
+    ObjectPool pool = new GenericObjectPool<TikaProcess>(new TikaProcessFactory(javaPath,
+      configDirectoryPath,
+      tikaDistDir,
+      tikaMaxHeapSizeMb,
+      parseProperties), config);
 
     return pool;
   }

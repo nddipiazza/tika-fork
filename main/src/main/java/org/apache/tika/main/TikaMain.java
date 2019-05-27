@@ -4,18 +4,25 @@ import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.tika.config.TikaConfig;
+import org.apache.tika.detect.DefaultDetector;
+import org.apache.tika.detect.Detector;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.io.IOUtils;
 import org.apache.tika.io.TikaInputStream;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.CompositeParser;
 import org.apache.tika.parser.ParseContext;
+import org.apache.tika.parser.Parser;
+import org.apache.tika.parser.html.HtmlMapper;
+import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.ContentHandler;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectOutputStream;
@@ -50,15 +57,31 @@ public class TikaMain {
   private ServerSocket contentInServerSocket;
   private ServerSocket metadataOutServerSocket;
   private ServerSocket contentOutServerSocket;
-  private String runUuid;
+  private Properties parserProperties;
+  private ConfigurableAutoDetectParser defaultParser;
+  private Detector detector = new DefaultDetector();
+  private String configDirectoryPath;
 
-  public TikaMain(String runUuid) {
-    this.runUuid = runUuid;
+  public TikaMain(String configDirectoryPath, Properties parseProperties){
+    this.parserProperties = parseProperties;
+    defaultParser = new ConfigurableAutoDetectParser(detector,
+      Integer.parseInt(parseProperties.getProperty("zipBombCompressionRatio", "200")),
+      Integer.parseInt(parseProperties.getProperty("zipBombMaxDepth", "200")),
+      Integer.parseInt(parseProperties.getProperty("zipBombMaxPackageEntryDepth", "20")));
+    if (StringUtils.isBlank(configDirectoryPath)) {
+      this.configDirectoryPath = System.getProperty("java.io.tmpdir");
+    } else {
+      if (configDirectoryPath.endsWith(File.separator)) {
+        configDirectoryPath = configDirectoryPath.substring(0, configDirectoryPath.length() - 1);
+      }
+      this.configDirectoryPath = configDirectoryPath;
+    }
   }
 
   private void run() throws Exception {
     ExecutorService es = Executors.newFixedThreadPool(3);
-    String portsFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-ports-" + runUuid + ".properties";
+    String portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + parserProperties.get("runUuid") + ".properties";
+    LOG.info("Tika ports file path: \"{}\"", portsFilePath);
     File portsFile = new File(portsFilePath);
 
     try {
@@ -177,6 +200,11 @@ public class TikaMain {
 
   private void parseFile(OutputStream metadataOutputStream, OutputStream contentOutputStream) throws Exception {
     ParseContext context = new ParseContext();
+
+    // collect extended set of elements
+    context.set(HtmlMapper.class, ExtendedHtmlMapper.INSTANCE);
+    context.set(Parser.class, defaultParser);
+
     TikaConfig config = TikaConfig.getDefaultConfig();
     Metadata metadata = new Metadata();
     CompositeParser compositeParser = new CompositeParser(config.getMediaTypeRegistry(), config.getParser());
@@ -185,17 +213,18 @@ public class TikaMain {
          InputStream inputStream = socket.getInputStream();
          ObjectOutputStream objectOutputStream = new ObjectOutputStream(metadataOutputStream)) {
 
-
       Properties parseProperties = new Properties();
-      String propertiesFilePath = System.getProperty("java.io.tmpdir") + File.separator + "tika-fork-" + runUuid + ".properties";
-      if (!Files.exists(Paths.get(propertiesFilePath))) {
-        throw new Exception("Cannot find property file: " + propertiesFilePath);
+      String parseContextPropertiesFilePath = configDirectoryPath + File.separator + "tikafork-context-" + parserProperties.get("runUuid") + ".properties";
+      if (!Files.exists(Paths.get(parseContextPropertiesFilePath))) {
+        throw new Exception("Cannot find property file: \"" + parseContextPropertiesFilePath + "\"");
       }
-      parseProperties.load(new FileInputStream(propertiesFilePath));
+      try (FileInputStream fis = new FileInputStream(parseContextPropertiesFilePath)) {
+        parseProperties.load(fis);
+      }
 
       String baseUri = parseProperties.getProperty("baseUri");
       if (baseUri == null) {
-        throw new Exception("Missing property baseUri from the properties file " + propertiesFilePath);
+        throw new Exception("Missing property baseUri from the properties file " + parseContextPropertiesFilePath);
       }
 
       String contentType = parseProperties.getProperty("contentType");
@@ -204,6 +233,14 @@ public class TikaMain {
       }
 
       boolean extractHtmlLinks = Boolean.parseBoolean(parseProperties.getProperty("extractHtmlLinks", "false"));
+
+      boolean includeImages = Boolean.parseBoolean(parseProperties.getProperty("includeImages", "false"));
+
+      if (includeImages) {
+        PDFParserConfig pdfParserConfig = new PDFParserConfig();
+        pdfParserConfig.setExtractInlineImages(true);
+        context.set(PDFParserConfig.class, pdfParserConfig);
+      }
 
       LOG.info("Next file - baseUri={}, contentType={}, extractHtmlLinks={}", baseUri, contentType, extractHtmlLinks);
 
@@ -218,8 +255,26 @@ public class TikaMain {
     }
   }
 
+  /**
+   * Runs an external tika parsing server.
+   * Does not use HTTP... directly uses sockets to avoid overhead.
+   * @param args The args[0] is the parser config file. This file will be deleted after running the program.
+   *             The args[1] is the configuration directory path.
+   */
   public static void main(String[] args) throws Exception {
-    TikaMain tikaMain = new TikaMain(args[0]);
-    tikaMain.run();
+    Properties parserProperties = new Properties();
+    File parserPropertiesFile = new File(args[0]);
+    if (!parserPropertiesFile.exists()) {
+      throw new FileNotFoundException("Could not find parser file \"" + args[0] + "\"");
+    }
+    LOG.info("Starting with parser properties file {}", args[0]);
+
+    try (FileReader fr = new FileReader(parserPropertiesFile)) {
+      parserProperties.load(fr);
+      TikaMain tikaMain = new TikaMain(args.length > 1 ? args[1] : null, parserProperties);
+      tikaMain.run();
+    } finally {
+      FileUtils.deleteQuietly(parserPropertiesFile);
+    }
   }
 }
