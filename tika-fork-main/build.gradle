@@ -3,7 +3,7 @@ plugins {
 }
 
 group "org.apache.tika"
-version "1.0"
+version "1.0b02"
 
 sourceCompatibility = 1.8
 
@@ -12,7 +12,7 @@ repositories {
 }
 
 jar {
-    baseName "tika-main"
+    baseName "tika-fork-main"
 }
 
 dependencies {
@@ -28,7 +28,7 @@ task copyDependencies(type: Copy) {
 }
 
 task copyJarToDist(type: Copy) {
-    from "$buildDir/libs/tika-main-${version}.jar"
+    from "$buildDir/libs/tika-fork-main-${version}.jar"
     into new File(buildDir, "dist")
 }
 

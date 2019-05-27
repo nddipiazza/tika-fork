@@ -19,7 +19,7 @@ import java.nio.charset.Charset;
 
 public class TikaBodyContentHandler extends ContentHandlerDecorator {
 
-  public static class LucidWriteOutContentHandler extends DefaultHandler {
+  public static class WriteOutContentHandler extends DefaultHandler {
   
     /**
      * The character stream.
@@ -37,7 +37,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
      */
     private int writeCount = 0;
   
-    private LucidWriteOutContentHandler(Writer writer, int writeLimit) {
+    private WriteOutContentHandler(Writer writer, int writeLimit) {
         this.writer = writer;
         this.writeLimit = writeLimit;
     }
@@ -48,7 +48,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
      *
      * @param writer writer
      */
-    public LucidWriteOutContentHandler(Writer writer) {
+    public WriteOutContentHandler(Writer writer) {
         this(writer, -1);
     }
   
@@ -58,7 +58,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
      *
      * @param stream output stream
      */
-    public LucidWriteOutContentHandler(OutputStream stream, Charset charset) {
+    public WriteOutContentHandler(OutputStream stream, Charset charset) {
         this(new OutputStreamWriter(stream, charset));
     }
   
@@ -76,7 +76,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
      * @param writeLimit maximum number of characters to include in the string,
      *                   or -1 to disable the write limit
      */
-    public LucidWriteOutContentHandler(int writeLimit) {
+    public WriteOutContentHandler(int writeLimit) {
         this(new StringWriter(), writeLimit);
     }
   
@@ -90,7 +90,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
      * {@link #isWriteLimitReached(Throwable)} method can be used to detect
      * this case.
      */
-    public LucidWriteOutContentHandler() {
+    public WriteOutContentHandler() {
         this(100 * 1000);
     }
   
@@ -212,8 +212,8 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
         super("write limit");
       }
   
-        public LucidWriteOutContentHandler getSource() {
-            return LucidWriteOutContentHandler.this;
+        public WriteOutContentHandler getSource() {
+            return WriteOutContentHandler.this;
         }
   
     }
@@ -249,7 +249,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
    * @param writer writer
    */
   public TikaBodyContentHandler(Writer writer) {
-    this(new TikaBodyContentHandler.LucidWriteOutContentHandler(writer));
+    this(new WriteOutContentHandler(writer));
   }
 
   /**
@@ -259,7 +259,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
    * @param stream output stream
    */
   public TikaBodyContentHandler(OutputStream stream, String encoding) {
-    this(new TikaBodyContentHandler.LucidWriteOutContentHandler(stream, Charset.forName(encoding)));
+    this(new WriteOutContentHandler(stream, Charset.forName(encoding)));
   }
 
   /**
@@ -269,7 +269,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
    * @param stream output stream
    */
   public TikaBodyContentHandler(OutputStream stream, Charset charset) {
-    this(new TikaBodyContentHandler.LucidWriteOutContentHandler(stream, charset));
+    this(new WriteOutContentHandler(stream, charset));
   }
 
   /**
@@ -285,7 +285,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
    *                   or -1 to disable the write limit
    */
   public TikaBodyContentHandler(int writeLimit) {
-    this(new TikaBodyContentHandler.LucidWriteOutContentHandler(writeLimit));
+    this(new WriteOutContentHandler(writeLimit));
   }
 
   /**
@@ -297,7 +297,7 @@ public class TikaBodyContentHandler extends ContentHandlerDecorator {
    * limit is reached, then a {@link SAXException} is thrown.
    */
   public TikaBodyContentHandler() {
-    this(new TikaBodyContentHandler.LucidWriteOutContentHandler());
+    this(new WriteOutContentHandler());
   }
 
 }

@@ -35,13 +35,14 @@ public class TikaProcessTest {
 
   @Before
   public void init() {
-    tikaDistPath = ".." + File.separator + "main" + File.separator + "build" + File.separator + "dist";
-    parseProperties = new Properties(); // use defaults
+    tikaDistPath = ".." + File.separator + "tika-fork-main" + File.separator + "build" + File.separator + "dist";
+    parseProperties = new Properties();
+    parseProperties.setProperty("parseContent", "true");
   }
 
   @Test
   public void testExternalTikaMultiThreaded() throws Exception {
-    numThreads = 20;
+    numThreads = 5;
     numFilesPerThread = 50;
     try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
       System.getProperty("java.io.tmpdir"),
@@ -53,14 +54,14 @@ public class TikaProcessTest {
       20,
       -1,
       -1)) {
-      doMultiThreadedParse(tikaProcessPool);
+      doParse(tikaProcessPool, true);
     }
   }
 
   @Test
   public void testExternalTikaSingleThreaded() throws Exception {
     numThreads = 1;
-    numFilesPerThread = 5;
+    numFilesPerThread = 50;
     try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
       System.getProperty("java.io.tmpdir"),
       tikaDistPath,
@@ -71,11 +72,30 @@ public class TikaProcessTest {
       20,
       -1,
       -1)) {
-      doMultiThreadedParse(tikaProcessPool);
+      doParse(tikaProcessPool, true);
     }
   }
 
-  private void doMultiThreadedParse(TikaProcessPool tikaProcessPool) throws Exception {
+  @Test
+  public void testExternalTikaSingleNoContent() throws Exception {
+    numThreads = 5;
+    numFilesPerThread = 50;
+    parseProperties.setProperty("parseContent", "false");
+    try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
+      System.getProperty("java.io.tmpdir"),
+      tikaDistPath,
+      200,
+      parseProperties,
+      -1,
+      -1,
+      20,
+      -1,
+      -1)) {
+      doParse(tikaProcessPool, false);
+    }
+  }
+
+  private void doParse(TikaProcessPool tikaProcessPool, boolean parseContent) throws Exception {
     AtomicInteger numParsed = new AtomicInteger(0);
     Runnable r = () -> {
       try {
@@ -92,17 +112,17 @@ public class TikaProcessTest {
               path = xlsPath;
               contentType = "application/vnd.ms-excel";
               numExpectedMetadataElms = 23;
-              numContentCharsExpected = 4824;
+              numContentCharsExpected = parseContent ? 4824 : 0;
             } else if (i % 3 == 1) {
               path = pdfPath;
               contentType = "application/pdf";
               numExpectedMetadataElms = 39;
-              numContentCharsExpected = 1069;
+              numContentCharsExpected = parseContent ? 1069 : 0;
             } else {
               path = htmlPath;
               contentType = "text/html";
               numExpectedMetadataElms = 8;
-              numContentCharsExpected = 2648;
+              numContentCharsExpected = parseContent ? 2648 : 0;
             }
             ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
             try (FileInputStream fis = new FileInputStream(path)) {

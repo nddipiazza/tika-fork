@@ -3,13 +3,15 @@ plugins {
 }
 
 group "org.apache.tika"
-version "1.0"
+version "1.0b02"
 
 sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
 }
+
+apply plugin: 'maven-publish'
 
 jar {
     baseName "tika-fork"
@@ -24,4 +26,12 @@ dependencies {
     compile group: "org.apache.commons", name: "commons-pool2", version: "${commonsPoolVersion}"
     compile "org.apache.tika:tika-core:${tikaVersion}"
     testCompile group: "junit", name: "junit", version: "${junitVersion}"
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
 }

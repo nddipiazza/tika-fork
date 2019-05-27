@@ -8,6 +8,7 @@ import org.apache.tika.detect.DefaultDetector;
 import org.apache.tika.detect.Detector;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.io.IOUtils;
+import org.apache.tika.io.NullOutputStream;
 import org.apache.tika.io.TikaInputStream;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.CompositeParser;
@@ -38,8 +39,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-public class TikaMain {
-  private static final Logger LOG = LoggerFactory.getLogger(TikaMain.class);
+public class TikaForkMain {
+  private static final Logger LOG = LoggerFactory.getLogger(TikaForkMain.class);
 
   private static TikaParsingHandler getContentHandler(String mainUrl,
                                                       Metadata metadata,
@@ -62,7 +63,7 @@ public class TikaMain {
   private Detector detector = new DefaultDetector();
   private String configDirectoryPath;
 
-  public TikaMain(String configDirectoryPath, Properties parseProperties){
+  public TikaForkMain(String configDirectoryPath, Properties parseProperties){
     this.parserProperties = parseProperties;
     defaultParser = new ConfigurableAutoDetectParser(detector,
       Integer.parseInt(parseProperties.getProperty("zipBombCompressionRatio", "200")),
@@ -79,100 +80,172 @@ public class TikaMain {
   }
 
   private void run() throws Exception {
-    ExecutorService es = Executors.newFixedThreadPool(3);
-    String portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + parserProperties.get("runUuid") + ".properties";
-    LOG.info("Tika ports file path: \"{}\"", portsFilePath);
-    File portsFile = new File(portsFilePath);
+    if (Boolean.parseBoolean(parserProperties.getProperty("parseContent", "false"))) {
+      ExecutorService es = Executors.newFixedThreadPool(3);
+      String portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + parserProperties.get("runUuid") + ".properties";
+      LOG.info("Tika ports file path: \"{}\"", portsFilePath);
+      File portsFile = new File(portsFilePath);
 
-    try {
-      contentInServerSocket = new ServerSocket(0);
-      metadataOutServerSocket = new ServerSocket(0);
-      contentOutServerSocket = new ServerSocket(0);
-
-      FileUtils.writeLines(portsFile,
-        Lists.newArrayList(
-          String.valueOf(contentInServerSocket.getLocalPort()),
-          String.valueOf(metadataOutServerSocket.getLocalPort()),
-          String.valueOf(contentOutServerSocket.getLocalPort())
-        )
-      );
-
-      while (true) {
-        final PipedInputStream metadataInputStream = new PipedInputStream();
-        final PipedOutputStream metadataOutputStream = new PipedOutputStream();
-
-        metadataInputStream.connect(metadataOutputStream);
-
-        final PipedInputStream contentInputStream = new PipedInputStream();
-        final PipedOutputStream contentOutputStream = new PipedOutputStream();
-
-        contentInputStream.connect(contentOutputStream);
-
-        es.execute(() -> {
-          try {
-            parseFile(metadataOutputStream, contentOutputStream);
-          } catch (Exception e) {
-            try {
-              contentOutputStream.close();
-            } catch (IOException e1) {
-              LOG.debug("Couldn't close content output stream.");
-            }
-            throw new RuntimeException("Could not parse file", e);
-          }
-        });
-
-        Future metadataFuture = es.submit(() -> {
-          try {
-            writeMetadata(metadataInputStream);
-          } catch (Exception e) {
-            try {
-              metadataOutputStream.close();
-            } catch (IOException e1) {
-              LOG.debug("Couldn't close metadata output stream.");
-            }
-            throw new RuntimeException("Could not write metadata", e);
-          }
-        });
-
-        Future contentFuture = es.submit(() -> {
-          try {
-            writeContent(contentInputStream);
-          } catch (Exception e) {
-            try {
-              contentInputStream.close();
-            } catch (IOException e1) {
-              LOG.debug("Couldn't close content input stream.");
-            }
-            throw new RuntimeException("Could not write content", e);
-          }
-        });
-
-        metadataFuture.get();
-        contentFuture.get();
-      }
-    } finally {
       try {
-        if (contentInServerSocket != null && contentInServerSocket.isBound()) {
-          contentInServerSocket.close();
+        contentInServerSocket = new ServerSocket(0);
+        metadataOutServerSocket = new ServerSocket(0);
+        contentOutServerSocket = new ServerSocket(0);
+
+        FileUtils.writeLines(portsFile,
+          Lists.newArrayList(
+            String.valueOf(contentInServerSocket.getLocalPort()),
+            String.valueOf(metadataOutServerSocket.getLocalPort()),
+            String.valueOf(contentOutServerSocket.getLocalPort())
+          )
+        );
+
+        while (true) {
+          final PipedInputStream metadataInputStream = new PipedInputStream();
+          final PipedOutputStream metadataOutputStream = new PipedOutputStream();
+
+          metadataInputStream.connect(metadataOutputStream);
+
+          final PipedInputStream contentInputStream = new PipedInputStream();
+          final PipedOutputStream contentOutputStream = new PipedOutputStream();
+
+          contentInputStream.connect(contentOutputStream);
+
+          es.execute(() -> {
+            try {
+              parseFile(metadataOutputStream, contentOutputStream);
+            } catch (Exception e) {
+              try {
+                contentOutputStream.close();
+              } catch (IOException e1) {
+                LOG.debug("Couldn't close content output stream.");
+              }
+              throw new RuntimeException("Could not parse file", e);
+            }
+          });
+
+          Future metadataFuture = es.submit(() -> {
+            try {
+              writeMetadata(metadataInputStream);
+            } catch (Exception e) {
+              try {
+                metadataOutputStream.close();
+              } catch (IOException e1) {
+                LOG.debug("Couldn't close metadata output stream.");
+              }
+              throw new RuntimeException("Could not write metadata", e);
+            }
+          });
+
+          Future contentFuture = es.submit(() -> {
+            try {
+              writeContent(contentInputStream);
+            } catch (Exception e) {
+              try {
+                contentInputStream.close();
+              } catch (IOException e1) {
+                LOG.debug("Couldn't close content input stream.");
+              }
+              throw new RuntimeException("Could not write content", e);
+            }
+          });
+
+          metadataFuture.get();
+          contentFuture.get();
         }
-      } catch (IOException e) {
-        LOG.debug("Could not close content in socket server", e);
+      } finally {
+        try {
+          if (contentInServerSocket != null && contentInServerSocket.isBound()) {
+            contentInServerSocket.close();
+          }
+        } catch (IOException e) {
+          LOG.debug("Could not close content in socket server", e);
+        }
+        try {
+          if (contentOutServerSocket != null && contentOutServerSocket.isBound()) {
+            contentOutServerSocket.close();
+          }
+        } catch (IOException e) {
+          LOG.debug("Could not close content out socket server", e);
+        }
+        try {
+          if (metadataOutServerSocket != null && metadataOutServerSocket.isBound()) {
+            metadataOutServerSocket.close();
+          }
+        } catch (IOException e) {
+          LOG.debug("Could not close metadata out socket server", e);
+        }
+        FileUtils.deleteQuietly(portsFile);
       }
+    } else {
+      ExecutorService es = Executors.newFixedThreadPool(2);
+      String portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + parserProperties.get("runUuid") + ".properties";
+      LOG.info("Tika ports file path: \"{}\"", portsFilePath);
+      File portsFile = new File(portsFilePath);
+
       try {
-        if (contentOutServerSocket != null && contentOutServerSocket.isBound()) {
-          contentOutServerSocket.close();
+        contentInServerSocket = new ServerSocket(0);
+        metadataOutServerSocket = new ServerSocket(0);
+
+        FileUtils.writeLines(portsFile,
+          Lists.newArrayList(
+            String.valueOf(contentInServerSocket.getLocalPort()),
+            String.valueOf(metadataOutServerSocket.getLocalPort())
+          )
+        );
+
+        while (true) {
+          final PipedInputStream metadataInputStream = new PipedInputStream();
+          final PipedOutputStream metadataOutputStream = new PipedOutputStream();
+
+          metadataInputStream.connect(metadataOutputStream);
+
+          final OutputStream contentOutputStream = new NullOutputStream();
+
+          es.execute(() -> {
+            try {
+              parseFile(metadataOutputStream, contentOutputStream);
+            } catch (Exception e) {
+              try {
+                contentOutputStream.close();
+              } catch (IOException e1) {
+                LOG.debug("Couldn't close content output stream.");
+              }
+              throw new RuntimeException("Could not parse file", e);
+            }
+          });
+
+          Future metadataFuture = es.submit(() -> {
+            try {
+              writeMetadata(metadataInputStream);
+            } catch (Exception e) {
+              try {
+                metadataOutputStream.close();
+              } catch (IOException e1) {
+                LOG.debug("Couldn't close metadata output stream.");
+              }
+              throw new RuntimeException("Could not write metadata", e);
+            }
+          });
+
+          metadataFuture.get();
         }
-      } catch (IOException e) {
-        LOG.debug("Could not close content out socket server", e);
-      }
-      try {
-        if (metadataOutServerSocket != null && metadataOutServerSocket.isBound()) {
-          metadataOutServerSocket.close();
+      } finally {
+        try {
+          if (contentInServerSocket != null && contentInServerSocket.isBound()) {
+            contentInServerSocket.close();
+          }
+        } catch (IOException e) {
+          LOG.debug("Could not close content in socket server", e);
         }
-      } catch (IOException e) {
-        LOG.debug("Could not close metadata out socket server", e);
+        try {
+          if (metadataOutServerSocket != null && metadataOutServerSocket.isBound()) {
+            metadataOutServerSocket.close();
+          }
+        } catch (IOException e) {
+          LOG.debug("Could not close metadata out socket server", e);
+        }
+        FileUtils.deleteQuietly(portsFile);
       }
-      FileUtils.deleteQuietly(portsFile);
     }
   }
 
@@ -271,8 +344,8 @@ public class TikaMain {
 
     try (FileReader fr = new FileReader(parserPropertiesFile)) {
       parserProperties.load(fr);
-      TikaMain tikaMain = new TikaMain(args.length > 1 ? args[1] : null, parserProperties);
-      tikaMain.run();
+      TikaForkMain tikaForkMain = new TikaForkMain(args.length > 1 ? args[1] : null, parserProperties);
+      tikaForkMain.run();
     } finally {
       FileUtils.deleteQuietly(parserPropertiesFile);
     }

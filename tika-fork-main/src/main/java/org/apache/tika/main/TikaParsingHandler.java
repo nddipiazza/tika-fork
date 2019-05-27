@@ -24,9 +24,9 @@ public class TikaParsingHandler extends DefaultHandler {
     this.linkHandler = linkHandler;
     this.output = output;
     if (linkHandler != null) {
-      handlers = new ContentHandler[]{mainHandler, linkHandler};
+      handlers = new ContentHandler[] {mainHandler, linkHandler};
     } else {
-      handlers = new ContentHandler[]{mainHandler};
+      handlers = new ContentHandler[] {mainHandler};
     }
   }
 
@@ -48,7 +48,7 @@ public class TikaParsingHandler extends DefaultHandler {
 
   @Override
   public final void startPrefixMapping(String prefix, String uri)
-      throws SAXException {
+    throws SAXException {
     for (ContentHandler handler : handlers) {
       handler.startPrefixMapping(prefix, uri);
     }
@@ -63,7 +63,7 @@ public class TikaParsingHandler extends DefaultHandler {
 
   @Override
   public final void processingInstruction(String target, String data)
-      throws SAXException {
+    throws SAXException {
     for (ContentHandler handler : handlers) {
       handler.processingInstruction(target, data);
     }
@@ -92,7 +92,7 @@ public class TikaParsingHandler extends DefaultHandler {
 
   @Override
   public final void startElement(String uri, String localName, String name, Attributes atts)
-      throws SAXException {
+    throws SAXException {
     for (ContentHandler handler : handlers) {
       handler.startElement(uri, localName, name, atts);
     }
@@ -100,7 +100,7 @@ public class TikaParsingHandler extends DefaultHandler {
 
   @Override
   public final void endElement(String uri, String localName, String name)
-      throws SAXException {
+    throws SAXException {
     for (ContentHandler handler : handlers) {
       handler.endElement(uri, localName, name);
     }
@@ -108,7 +108,7 @@ public class TikaParsingHandler extends DefaultHandler {
 
   @Override
   public final void characters(char[] ch, int start, int length)
-      throws SAXException {
+    throws SAXException {
     for (ContentHandler handler : handlers) {
       handler.characters(ch, start, length);
     }
@@ -116,7 +116,7 @@ public class TikaParsingHandler extends DefaultHandler {
 
   @Override
   public final void ignorableWhitespace(char[] ch, int start, int length)
-      throws SAXException {
+    throws SAXException {
     for (ContentHandler handler : handlers) {
       handler.ignorableWhitespace(ch, start, length);
     }

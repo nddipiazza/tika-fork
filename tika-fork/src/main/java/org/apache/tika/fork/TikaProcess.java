@@ -52,12 +52,15 @@ public class TikaProcess {
   private String parseConfigPropertiesFilePath;
   private String parseContextPropertiesFilePath;
   private String portsFilePath;
+  private boolean parseContent;
 
   public TikaProcess(String javaPath,
                      String configDirectoryPath,
                      String tikaDistPath,
                      int tikaMaxHeapSizeMb,
-                     Properties parseProperties) {
+                     Properties parserProperties) {
+    parseContent = Boolean.parseBoolean(parserProperties.getProperty("parseContent", "false"));
+
     parseConfigPropertiesFilePath = configDirectoryPath + File.separator + "tikafork-config-" + runUuid + ".properties";
     parseContextPropertiesFilePath = configDirectoryPath + File.separator + "tikafork-context-" + runUuid + ".properties";
     portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + runUuid + ".properties";
@@ -69,9 +72,9 @@ public class TikaProcess {
     }
     command.add("-cp");
     command.add(tikaDistPath + File.separator + "*");
-    command.add("org.apache.tika.main.TikaMain");
+    command.add("org.apache.tika.main.TikaForkMain");
 
-    Properties sendParseProperties = (Properties)parseProperties.clone();
+    Properties sendParseProperties = (Properties)parserProperties.clone();
     sendParseProperties.setProperty("runUuid", runUuid);
     try (FileOutputStream fos = new FileOutputStream(parseConfigPropertiesFilePath)) {
       sendParseProperties.store(fos, null);
@@ -91,8 +94,9 @@ public class TikaProcess {
       List<Integer> ports = new ArrayList<>();
 
       // Wait for the sockets file for up to WAIT_FOR_PORTS_FOR_MAX_MS
+      int numPortsToWaitFor = parseContent ? 3 : 2;
       Instant stopWaitingOn = Instant.now().plus(Duration.ofMillis(WAIT_FOR_PORTS_FOR_MAX_MS));
-      while (Instant.now().isBefore(stopWaitingOn) && ports.size() < 3) {
+      while (Instant.now().isBefore(stopWaitingOn) && ports.size() < numPortsToWaitFor) {
         try (FileReader fr = new FileReader(new File(portsFilePath));
              BufferedReader br = new BufferedReader(fr)) {
           ports.clear();
@@ -103,7 +107,7 @@ public class TikaProcess {
         } catch (Exception ignore) {
           LOG.debug("Ignoring an exception getting the ports for Tika Process " + runUuid);
         }
-        if (ports.size() < 3) {
+        if (ports.size() < numPortsToWaitFor) {
           if (!process.isAlive()) {
             throw new RuntimeException("Process died with exit code " + process.exitValue());
           }
@@ -114,13 +118,15 @@ public class TikaProcess {
           }
         }
       }
-      if (ports.size() < 3) {
+      if (ports.size() < numPortsToWaitFor) {
         throw new RuntimeException("Could not get the ports from Tika process " + runUuid +
           " after " + WAIT_FOR_PORTS_FOR_MAX_MS + " ms. This timeout is specified by the org.apache.tika.ports.timeout.ms system property.");
       }
       contentInPort = ports.get(0);
       metadataOutPort = ports.get(1);
-      contentOutPort = ports.get(2);
+      if (parseContent) {
+        contentOutPort = ports.get(2);
+      }
     } catch (IOException e) {
       throw new RuntimeException("Could not start tika external with command " + command, e);
     }
@@ -175,24 +181,27 @@ public class TikaProcess {
         throw new RuntimeException("Failed to read metadata from forked Tika parser JVM", e);
       }
     });
-    Future contentFuture = es.submit(() -> {
-      try {
-        getContent(contentOutPort, contentOutputStream);
-        return true;
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
-      }
-    });
 
     Instant mustFinishByInstant = Instant.now().plus(Duration.ofMillis(abortAfterMs));
-    while (true) {
-      try {
-        contentFuture.get(250, TimeUnit.MILLISECONDS);
-        break;
-      } catch (TimeoutException e) {
-        LOG.debug("Still waiting for content from parse");
-        if (Instant.now().isAfter(mustFinishByInstant)) {
-          throw e;
+    if (parseContent) {
+      Future contentFuture = es.submit(() -> {
+        try {
+          getContent(contentOutPort, contentOutputStream);
+          return true;
+        } catch (Exception e) {
+          throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
+        }
+      });
+
+      while (true) {
+        try {
+          contentFuture.get(250, TimeUnit.MILLISECONDS);
+          break;
+        } catch (TimeoutException e) {
+          LOG.debug("Still waiting for content from parse");
+          if (Instant.now().isAfter(mustFinishByInstant)) {
+            throw e;
+          }
         }
       }
     }
