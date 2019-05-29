@@ -17,4 +17,4 @@ This program attempts to deal with these problems:
 
 ## Usage
 
-See the [Tika Fork Process Unit Test](fork/src/test/java/org/apache/tika/fork/TikaProcessTest.java) for several detailed examples of how to use the program.
+See the [Tika Fork Process Unit Test](tika-fork/src/test/java/org/apache/tika/fork/TikaProcessTest.java) for several detailed examples of how to use the program.
