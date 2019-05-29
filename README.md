@@ -1,10 +1,10 @@
 # tika-fork
 
-Utility that allows you to run Tika as a forked JVM to minimize memory issues.
+Utility that allows you to run Tika as a pool of forked JVMs to minimize memory issues.
 
 ## Motiviation
 
-It is a common issue when dealing with Tika to have parses that cause your entire JVM to crash due to out-of-memory conditions.
+It is a common issue when dealing with Tika to have parses that cause your entire JVM to crash due to out-of-memory conditions. There are some parameters that are intended to prevent these issues but the issues can still happen from time to time as described in https://issues.apache.org/jira/browse/TIKA-2575
 
 There are also problems where a Tika parse will not return in sufficient time due to GC hell or some other CPU intense process and will cause issues.
 
