@@ -230,10 +230,6 @@ public class TikaProcess {
       out.write('\n');
       out.write(contentType.getBytes());
       out.write('\n');
-//      out.write("false".getBytes());
-//      out.write('\n');
-//      out.write("false".getBytes());
-//      out.write('\n');
       long numChars;
       do {
         numChars = IOUtils.copy(contentInStream, out);

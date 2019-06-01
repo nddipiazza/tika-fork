@@ -41,6 +41,17 @@ task copyJarToDist(type: Copy) {
     into new File(buildDir, "dist")
 }
 
-task dist(dependsOn: [build, copyDependencies, copyJarToDist]) {
+task tarz(type: Tar) {
+    archiveName = "tika-fork-main-${version}.tgz"
+    into ('/') {
+        from 'build/dist'
+        include '*'
+    }
+    destinationDir  file('build/tgz')
+    extension 'tgz'
+    compression = Compression.GZIP
+}
+
+task dist(dependsOn: [build, copyDependencies, copyJarToDist, tarz]) {
 
 }
