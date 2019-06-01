@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -82,14 +83,17 @@ public class TikaProcess {
       throw new RuntimeException("Couldn't save the parse properties file", e);
     }
 
+    command.add("-parserPropertiesFilePath");
     command.add(parseConfigPropertiesFilePath);
     if (configDirectoryPath != null && configDirectoryPath.trim().length() > 0) {
+      command.add("-configDirectoryPath");
       command.add(configDirectoryPath);
     }
     try {
       process = new ProcessBuilder(command)
-        .inheritIO()
         .start();
+      inheritIO(process.getInputStream());
+      inheritIO(process.getErrorStream());
       LOG.info("Started command: {}", command);
       List<Integer> ports = new ArrayList<>();
 
@@ -159,17 +163,9 @@ public class TikaProcess {
                         OutputStream contentOutputStream,
                         long abortAfterMs) throws InterruptedException, ExecutionException, TimeoutException {
     ExecutorService es = Executors.newFixedThreadPool(3);
-    Properties parseContextProperties = new Properties();
-    parseContextProperties.setProperty("baseUri", baseUri);
-    parseContextProperties.setProperty("contentType", contentType);
-    try (FileOutputStream fis = new FileOutputStream(parseContextPropertiesFilePath)) {
-      parseContextProperties.store(fis, null);
-    } catch (IOException e) {
-      throw new RuntimeException("Could not write to properties file: " + parseContextPropertiesFilePath, e);
-    }
     es.execute(() -> {
       try {
-        writeContent(contentInPort, contentInStream);
+        writeContent(baseUri, contentType, contentInPort, contentInStream);
       } catch (Exception e) {
         throw new RuntimeException("Failed to send content stream to forked Tika parser JVM", e);
       }
@@ -224,9 +220,20 @@ public class TikaProcess {
     return metadataResult;
   }
 
-  private void writeContent(int port, InputStream contentInStream) throws Exception {
+  private void writeContent(String baseUri,
+                            String contentType,
+                            int port,
+                            InputStream contentInStream) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
     try (OutputStream out = socket.getOutputStream()) {
+      out.write(baseUri.getBytes());
+      out.write('\n');
+      out.write(contentType.getBytes());
+      out.write('\n');
+//      out.write("false".getBytes());
+//      out.write('\n');
+//      out.write("false".getBytes());
+//      out.write('\n');
       long numChars;
       do {
         numChars = IOUtils.copy(contentInStream, out);
@@ -274,5 +281,15 @@ public class TikaProcess {
     }
 
     return socket;
+  }
+
+  private void inheritIO(final InputStream src) {
+    new Thread(() -> {
+      Scanner sc = new Scanner(src);
+      while (sc.hasNextLine()) {
+        String nextLine = sc.nextLine();
+        LOG.info(nextLine);
+      }
+    }).start();
   }
 }

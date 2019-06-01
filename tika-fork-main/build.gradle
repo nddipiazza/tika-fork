@@ -3,7 +3,6 @@ plugins {
 }
 
 group "org.apache.tika"
-version "1.0b02"
 
 sourceCompatibility = 1.8
 
@@ -15,10 +14,20 @@ jar {
     baseName "tika-fork-main"
 }
 
+configurations.all {
+    exclude module: 'slf4j-log4j12'
+}
+
 dependencies {
-    compile "com.fasterxml.jackson.core:jackson-databind:2.4.4"
+    compile "com.fasterxml.jackson.core:jackson-databind:${jacksonDatabindVersion}"
     compile "org.apache.tika:tika-core:${tikaVersion}"
     compile "org.apache.tika:tika-parsers:${tikaVersion}"
+    compile "args4j:args4j:${args4jVersion}"
+    compile "org.slf4j:slf4j-api:${slf4jVersion}"
+    compile "org.slf4j:slf4j-log4j12:${slf4jVersion}"
+    compile "org.slf4j:slf4j-simple:${slf4jVersion}"
+    compile "org.slf4j:jcl-over-slf4j:${slf4jVersion}"
+    compile "org.slf4j:jul-to-slf4j:${slf4jVersion}"
     testCompile group: "junit", name: "junit", version: "${junitVersion}"
 }
 
@@ -32,6 +41,6 @@ task copyJarToDist(type: Copy) {
     into new File(buildDir, "dist")
 }
 
-task buildWithDependencies(dependsOn: [build, copyDependencies, copyJarToDist]) {
+task dist(dependsOn: [build, copyDependencies, copyJarToDist]) {
 
 }

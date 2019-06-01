@@ -196,7 +196,7 @@ public class TikaProcessTest {
       -1)) {
       ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
       try (FileInputStream fis = new FileInputStream(bombFilePath)) {
-        tikaProcessPool.parse(bombFilePath, bombContentType, fis, contentOutputStream, 5000L);
+        tikaProcessPool.parse(bombFilePath, bombContentType, fis, contentOutputStream, 500L);
         Assert.fail("Should have timed out");
       } catch (TimeoutException e) {
         LOG.info("Got the expected exception", e);

@@ -3,7 +3,6 @@ plugins {
 }
 
 group "org.apache.tika"
-version "1.0b02"
 
 sourceCompatibility = 1.8
 
@@ -16,7 +15,9 @@ apply plugin: 'maven-publish'
 jar {
     baseName "tika-fork"
 }
-
+configurations.all {
+    exclude module: 'slf4j-log4j12'
+}
 dependencies {
     compile "org.slf4j:slf4j-api:${slf4jVersion}"
     compile "org.slf4j:slf4j-log4j12:${slf4jVersion}"
