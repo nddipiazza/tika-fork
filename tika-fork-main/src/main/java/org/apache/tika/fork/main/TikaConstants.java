@@ -1,4 +1,4 @@
-package org.apache.tika.main;
+package org.apache.tika.fork.main;
 
 import org.apache.tika.metadata.Property;
 import org.apache.tika.metadata.TikaCoreProperties;

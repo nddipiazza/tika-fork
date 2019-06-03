@@ -1,4 +1,4 @@
-package org.apache.tika.main;
+package org.apache.tika.fork.main;
 
 import org.apache.tika.parser.html.DefaultHtmlMapper;
 import org.apache.tika.parser.html.HtmlMapper;

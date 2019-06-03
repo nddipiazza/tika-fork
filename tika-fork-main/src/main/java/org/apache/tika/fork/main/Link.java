@@ -1,4 +1,4 @@
-package org.apache.tika.main;
+package org.apache.tika.fork.main;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;

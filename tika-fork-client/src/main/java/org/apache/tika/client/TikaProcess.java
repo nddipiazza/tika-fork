@@ -1,6 +1,5 @@
-package org.apache.tika.fork;
+package org.apache.tika.client;
 
-import org.apache.tika.io.IOUtils;
 import org.apache.tika.metadata.Metadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,10 +10,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
 import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,10 +19,6 @@ import java.util.Properties;
 import java.util.Scanner;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class TikaProcess {
@@ -54,6 +46,7 @@ public class TikaProcess {
   private String parseContextPropertiesFilePath;
   private String portsFilePath;
   private boolean parseContent;
+  private TikaRunner tikaRunner;
 
   public TikaProcess(String javaPath,
                      String configDirectoryPath,
@@ -71,9 +64,10 @@ public class TikaProcess {
     if (tikaMaxHeapSizeMb > 0) {
       command.add("-Xmx" + tikaMaxHeapSizeMb + "m");
     }
+    command.add("-Djava.awt.headless=true");
     command.add("-cp");
     command.add(tikaDistPath + File.separator + "*");
-    command.add("org.apache.tika.main.TikaForkMain");
+    command.add("org.apache.tika.fork.main.TikaForkMain");
 
     Properties sendParseProperties = (Properties)parserProperties.clone();
     sendParseProperties.setProperty("runUuid", runUuid);
@@ -131,6 +125,7 @@ public class TikaProcess {
       if (parseContent) {
         contentOutPort = ports.get(2);
       }
+      tikaRunner = new TikaRunner(contentInPort, metadataOutPort, contentOutPort, parseContent);
     } catch (IOException e) {
       throw new RuntimeException("Could not start tika external with command " + command, e);
     }
@@ -157,128 +152,6 @@ public class TikaProcess {
     }
   }
 
-  public Metadata parse(String baseUri,
-                        String contentType,
-                        InputStream contentInStream,
-                        OutputStream contentOutputStream,
-                        long abortAfterMs) throws InterruptedException, ExecutionException, TimeoutException {
-    ExecutorService es = Executors.newFixedThreadPool(3);
-    es.execute(() -> {
-      try {
-        writeContent(baseUri, contentType, contentInPort, contentInStream);
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to send content stream to forked Tika parser JVM", e);
-      }
-    });
-    Future<Metadata> metadataFuture = es.submit(() -> {
-      try {
-        return getMetadata(metadataOutPort);
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to read metadata from forked Tika parser JVM", e);
-      }
-    });
-
-    Instant mustFinishByInstant = Instant.now().plus(Duration.ofMillis(abortAfterMs));
-    if (parseContent) {
-      Future contentFuture = es.submit(() -> {
-        try {
-          getContent(contentOutPort, contentOutputStream);
-          return true;
-        } catch (Exception e) {
-          throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
-        }
-      });
-
-      while (true) {
-        try {
-          contentFuture.get(250, TimeUnit.MILLISECONDS);
-          break;
-        } catch (TimeoutException e) {
-          LOG.debug("Still waiting for content from parse");
-          if (Instant.now().isAfter(mustFinishByInstant)) {
-            throw e;
-          }
-        }
-      }
-    }
-
-    Metadata metadataResult;
-    while (true) {
-      try {
-        metadataResult = metadataFuture.get(250, TimeUnit.MILLISECONDS);
-        break;
-      } catch (TimeoutException e) {
-        LOG.debug("Still waiting for metadata from parse");
-        if (Instant.now().isAfter(mustFinishByInstant)) {
-          throw e;
-        }
-      }
-    }
-
-    es.shutdown();
-
-    return metadataResult;
-  }
-
-  private void writeContent(String baseUri,
-                            String contentType,
-                            int port,
-                            InputStream contentInStream) throws Exception {
-    Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
-    try (OutputStream out = socket.getOutputStream()) {
-      out.write(baseUri.getBytes());
-      out.write('\n');
-      out.write(contentType.getBytes());
-      out.write('\n');
-      long numChars;
-      do {
-        numChars = IOUtils.copy(contentInStream, out);
-      } while (numChars > 0);
-    } finally {
-      socket.close();
-    }
-  }
-
-  private Metadata getMetadata(int port) throws Exception {
-    Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
-    try (InputStream metadataIn = socket.getInputStream()) {
-      ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
-      return (Metadata) objectInputStream.readObject();
-    } finally {
-      socket.close();
-    }
-  }
-
-  private void getContent(int port, OutputStream contentOutputStream) throws Exception {
-    Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
-    try (InputStream in = socket.getInputStream()) {
-      long numChars;
-      do {
-        numChars = IOUtils.copy(in, contentOutputStream);
-      } while (numChars > 0);
-    } finally {
-      socket.close();
-    }
-  }
-
-  private static Socket getSocket(String host, int port) throws InterruptedException {
-    Socket socket;
-    int maxRetries = 20;
-
-    while (true) {
-      try {
-        socket = new Socket(host, port);
-        if (socket != null || --maxRetries < 0) {
-          break;
-        }
-      } catch (IOException e) {
-        Thread.sleep(1000);
-      }
-    }
-
-    return socket;
-  }
-
   private void inheritIO(final InputStream src) {
     new Thread(() -> {
       Scanner sc = new Scanner(src);
@@ -287,5 +160,13 @@ public class TikaProcess {
         LOG.info(nextLine);
       }
     }).start();
+  }
+
+  public Metadata parse(String baseUri,
+                        String contentType,
+                        InputStream contentInputStream,
+                        OutputStream contentOutputStream,
+                        long abortAfterMs) throws InterruptedException, ExecutionException, TimeoutException {
+    return tikaRunner.parse(baseUri, contentType, contentInputStream, contentOutputStream, abortAfterMs);
   }
 }

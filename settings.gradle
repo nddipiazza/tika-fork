@@ -1,4 +1,3 @@
 rootProject.name = 'tika-fork'
 include 'tika-fork-main'
-include 'tika-fork'
-
+include 'tika-fork-client'

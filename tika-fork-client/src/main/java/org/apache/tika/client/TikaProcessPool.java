@@ -1,4 +1,4 @@
-package org.apache.tika.fork;
+package org.apache.tika.client;
 
 import org.apache.commons.pool2.ObjectPool;
 import org.apache.commons.pool2.impl.GenericObjectPool;

@@ -13,11 +13,13 @@ repositories {
 apply plugin: 'maven-publish'
 
 jar {
-    baseName "tika-fork"
+    baseName "tika-fork-client"
 }
+
 configurations.all {
     exclude module: 'slf4j-log4j12'
 }
+
 dependencies {
     compile "org.slf4j:slf4j-api:${slf4jVersion}"
     compile "org.slf4j:slf4j-log4j12:${slf4jVersion}"

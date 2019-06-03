@@ -1,4 +1,4 @@
-package org.apache.tika.main;
+package org.apache.tika.fork.main;
 
 import com.google.common.collect.Lists;
 import org.apache.commons.io.FileUtils;
@@ -63,8 +63,6 @@ public class TikaForkMain {
   private int metadataOutServerPort = 0;
   @Option(name = "-contentOutServerPort", usage = "This is the port for the socket server that will be used to send out the parsed file contents.")
   private int contentOutServerPort = 0;
-  @Option(name = "-healthCheckPort", usage = "If specified, this is the port that will be used for a health check service.")
-  private int healthCheckPort = 0;
 
   private ServerSocket contentInServerSocket;
   private ServerSocket metadataOutServerSocket;
@@ -116,10 +114,6 @@ public class TikaForkMain {
             String.valueOf(contentOutServerSocket.getLocalPort())
           )
         );
-
-        if (healthCheckPort > 0) {
-          keepAliveEs.execute(new HealthCheckServer(healthCheckPort));
-        }
 
         while (true) {
           final PipedInputStream metadataInputStream = new PipedInputStream();
@@ -212,10 +206,6 @@ public class TikaForkMain {
           )
         );
 
-        if (healthCheckPort > 0) {
-          keepAliveEs.execute(new HealthCheckServer(healthCheckPort));
-        }
-
         while (true) {
           final PipedInputStream metadataInputStream = new PipedInputStream();
           final PipedOutputStream metadataOutputStream = new PipedOutputStream();
@@ -295,7 +285,6 @@ public class TikaForkMain {
   }
 
   private void parseFile(OutputStream metadataOutputStream, OutputStream contentOutputStream) throws Exception {
-    HealthCheckServer.LAST_UPDATE = System.currentTimeMillis();
     ParseContext context = new ParseContext();
 
     // collect extended set of elements

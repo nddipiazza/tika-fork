@@ -1,5 +1,6 @@
 package org.apache.tika.fork;
 
+import org.apache.tika.client.TikaProcessPool;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.utils.ExceptionUtils;
 import org.junit.Assert;

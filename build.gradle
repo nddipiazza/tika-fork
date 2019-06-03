@@ -3,7 +3,6 @@ plugins {
 }
 
 group 'org.apache.tika'
-version '1.0b02'
 
 sourceCompatibility = 1.8
 

@@ -1,4 +1,4 @@
-package org.apache.tika.main;
+package org.apache.tika.fork.main;
 
 import org.xml.sax.Attributes;
 import org.xml.sax.ContentHandler;
