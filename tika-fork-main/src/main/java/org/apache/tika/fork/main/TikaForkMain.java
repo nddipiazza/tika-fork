@@ -43,10 +43,8 @@ public class TikaForkMain {
   private static TikaParsingHandler getContentHandler(String mainUrl,
                                                       Metadata metadata,
                                                       OutputStream out,
-                                                      boolean extractHtmlLinks,
-                                                      int maxBytes) throws TikaException {
-    ContentHandler main = new TikaBodyContentHandler(maxBytes);
-
+                                                      boolean extractHtmlLinks) throws TikaException {
+    ContentHandler main = new TikaBodyContentHandler(out, TikaConstants.defaultOutputEncoding);
     TikaLinkContentHandler linksHandler = null;
     if (extractHtmlLinks) {
       linksHandler = new TikaLinkContentHandler(mainUrl, true);
@@ -324,7 +322,7 @@ public class TikaForkMain {
 
       TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
 
-      TikaParsingHandler contentHandler = getContentHandler(baseUri, metadata, contentOutputStream, extractHtmlLinks, 200);
+      TikaParsingHandler contentHandler = getContentHandler(baseUri, metadata, contentOutputStream, extractHtmlLinks);
       compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
 
       objectOutputStream.writeObject(metadata);

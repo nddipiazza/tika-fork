@@ -192,9 +192,7 @@ public class TikaProcessTest {
       ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
       try (FileInputStream fis = new FileInputStream(bombFilePath)) {
         tikaProcessPool.parse(bombFilePath, bombContentType, fis, contentOutputStream, 300000L, maxBytesToParse);
-        Assert.fail("Should have OOM'd");
-      } catch (Exception e) {
-        LOG.info("Got the expected exception", e);
+        Assert.assertEquals(0, contentOutputStream.toString("UTF-8").length());
       }
     }
   }
