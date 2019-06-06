@@ -1,5 +1,6 @@
 package org.apache.tika.client;
 
+import org.apache.commons.io.input.BoundedInputStream;
 import org.apache.tika.io.IOUtils;
 import org.apache.tika.metadata.Metadata;
 import org.slf4j.Logger;
@@ -42,18 +43,19 @@ public class TikaRunner {
                         String contentType,
                         InputStream contentInStream,
                         OutputStream contentOutputStream,
-                        long abortAfterMs) throws InterruptedException, ExecutionException, TimeoutException {
+                        long abortAfterMs,
+                        long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException {
     ExecutorService es = Executors.newFixedThreadPool(3);
     es.execute(() -> {
       try {
-        writeContent(baseUri, contentType, contentInPort, contentInStream);
+        writeContent(baseUri, contentType, contentInPort, contentInStream, maxBytesToParse);
       } catch (Exception e) {
         throw new RuntimeException("Failed to send content stream to forked Tika parser JVM", e);
       }
     });
     Future<Metadata> metadataFuture = es.submit(() -> {
       try {
-        return getMetadata(metadataOutPort);
+        return getMetadata(metadataOutPort, baseUri);
       } catch (Exception e) {
         throw new RuntimeException("Failed to read metadata from forked Tika parser JVM", e);
       }
@@ -104,27 +106,34 @@ public class TikaRunner {
   private void writeContent(String baseUri,
                             String contentType,
                             int port,
-                            InputStream contentInStream) throws Exception {
+                            InputStream contentInStream,
+                            long maxBytesToParse) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
-    try (OutputStream out = socket.getOutputStream()) {
+    try (OutputStream out = socket.getOutputStream();
+         BoundedInputStream boundedInputStream = new BoundedInputStream(contentInStream, maxBytesToParse + 1)) {
       out.write(baseUri.getBytes());
       out.write('\n');
       out.write(contentType.getBytes());
       out.write('\n');
       long numChars;
       do {
-        numChars = IOUtils.copy(contentInStream, out);
+        numChars = IOUtils.copy(boundedInputStream, out);
       } while (numChars > 0);
     } finally {
       socket.close();
     }
   }
 
-  private Metadata getMetadata(int port) throws Exception {
+  private Metadata getMetadata(int port, String baseUri) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
     try (InputStream metadataIn = socket.getInputStream()) {
       ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
-      return (Metadata) objectInputStream.readObject();
+      try {
+        return (Metadata) objectInputStream.readObject();
+      } catch (IOException e) {
+        LOG.warn("Could not parse metadata for " + baseUri);
+        return new Metadata();
+      }
     } finally {
       socket.close();
     }

@@ -52,10 +52,11 @@ public class TikaProcessPool implements AutoCloseable {
                         String contentType,
                         InputStream contentInputStream,
                         OutputStream contentOutputStream,
-                        long abortAfterMs) throws Exception {
+                        long abortAfterMs,
+                        long maxBytesToParse) throws Exception {
     TikaProcess process = (TikaProcess) pool.borrowObject();
     try {
-      return process.parse(baseUri, contentType, contentInputStream, contentOutputStream, abortAfterMs);
+      return process.parse(baseUri, contentType, contentInputStream, contentOutputStream, abortAfterMs, maxBytesToParse);
     } catch (Exception e) {
       pool.invalidateObject(process);
       // Do not return the object to the pool twice

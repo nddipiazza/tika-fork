@@ -166,7 +166,8 @@ public class TikaProcess {
                         String contentType,
                         InputStream contentInputStream,
                         OutputStream contentOutputStream,
-                        long abortAfterMs) throws InterruptedException, ExecutionException, TimeoutException {
-    return tikaRunner.parse(baseUri, contentType, contentInputStream, contentOutputStream, abortAfterMs);
+                        long abortAfterMs,
+                        long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException {
+    return tikaRunner.parse(baseUri, contentType, contentInputStream, contentOutputStream, abortAfterMs, maxBytesToParse);
   }
 }

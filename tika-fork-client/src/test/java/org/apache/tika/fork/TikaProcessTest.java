@@ -28,9 +28,11 @@ public class TikaProcessTest {
   String pdfPath = "test-files" + File.separator + "pdf-sample.pdf";
   String htmlPath = "test-files" + File.separator + "html-sample.html";
   String xlsPath = "test-files" + File.separator + "xls-sample.xls";
+  String txtPath = "test-files" + File.separator + "out.txt";
   String bombFilePath = "test-files" + File.separator + "bomb.xls";
   String bombContentType = "application/vnd.ms-excel";
   Properties parseProperties;
+  long maxBytesToParse = 256000000;
 
   AssertionError exc;
 
@@ -140,7 +142,9 @@ public class TikaProcessTest {
                   contentType,
                   fis,
                   contentOutputStream,
-                  300000L);
+                  300000L,
+                  maxBytesToParse
+                  );
               LOG.info("Metadata from the tika process: {}", metadata);
               Assert.assertEquals(numExpectedMetadataElms, metadata.size());
               //LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
@@ -187,7 +191,7 @@ public class TikaProcessTest {
         -1)) {
       ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
       try (FileInputStream fis = new FileInputStream(bombFilePath)) {
-        tikaProcessPool.parse(bombFilePath, bombContentType, fis, contentOutputStream, 300000L);
+        tikaProcessPool.parse(bombFilePath, bombContentType, fis, contentOutputStream, 300000L, maxBytesToParse);
         Assert.fail("Should have OOM'd");
       } catch (Exception e) {
         LOG.info("Got the expected exception", e);
@@ -212,7 +216,7 @@ public class TikaProcessTest {
         -1)) {
       ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
       try (FileInputStream fis = new FileInputStream(bombFilePath)) {
-        tikaProcessPool.parse(bombFilePath, bombContentType, fis, contentOutputStream, 500L);
+        tikaProcessPool.parse(bombFilePath, bombContentType, fis, contentOutputStream, 500L, maxBytesToParse);
         Assert.fail("Should have timed out");
       } catch (TimeoutException e) {
         LOG.info("Got the expected exception", e);
@@ -221,9 +225,7 @@ public class TikaProcessTest {
   }
 
   @Test
-  public void testTikaProcessEvict() throws Exception {
-    numThreads = 1;
-    numFilesPerThread = 400;
+  public void testTikaProcessMaxBytesParsed() throws Exception {
     try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
         System.getProperty("java.io.tmpdir"),
         tikaDistPath,
@@ -237,10 +239,26 @@ public class TikaProcessTest {
         1000,
         5000,
         -1)) {
-      // todo make sure the single tika process stays alive the duration of the crawl.
-      doParse(tikaProcessPool, true);
-    }
-    // todo make sure the process died
-  }
+      String path;
+      String contentType;
+      int numExpectedMetadataElms;
+      int numContentCharsExpected;
 
+      path = txtPath;
+      contentType = "plain/text";
+
+      ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
+      try (FileInputStream fis = new FileInputStream(path)) {
+        Metadata metadata = tikaProcessPool.parse(path,
+          contentType,
+          fis,
+          contentOutputStream,
+          300000L,
+          100
+        );
+        LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
+        Assert.assertEquals(0, contentOutputStream.toString("UTF-8").length());
+      }
+    }
+  }
 }

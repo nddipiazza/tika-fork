@@ -27,6 +27,8 @@ dependencies {
     compile "org.slf4j:jcl-over-slf4j:${slf4jVersion}"
     compile "org.slf4j:jul-to-slf4j:${slf4jVersion}"
     compile group: "org.apache.commons", name: "commons-pool2", version: "${commonsPoolVersion}"
+    compile group: 'commons-io', name: 'commons-io', version: "${commonsIoVersion}"
+
     compile "org.apache.tika:tika-core:${tikaVersion}"
     testCompile group: "junit", name: "junit", version: "${junitVersion}"
 }
