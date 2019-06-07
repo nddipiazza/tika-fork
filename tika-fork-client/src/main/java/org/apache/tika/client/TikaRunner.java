@@ -110,7 +110,7 @@ public class TikaRunner {
                             long maxBytesToParse) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
     try (OutputStream out = socket.getOutputStream();
-         BoundedInputStream boundedInputStream = new BoundedInputStream(contentInStream, maxBytesToParse + 1)) {
+         BoundedInputStream boundedInputStream = new BoundedInputStream(contentInStream, maxBytesToParse)) {
       out.write(baseUri.getBytes());
       out.write('\n');
       out.write(contentType.getBytes());

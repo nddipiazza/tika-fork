@@ -243,7 +243,7 @@ public class TikaProcessTest {
       int numContentCharsExpected;
 
       path = txtPath;
-      contentType = "plain/text";
+      contentType = "text/plain";
 
       ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
       try (FileInputStream fis = new FileInputStream(path)) {
@@ -255,7 +255,7 @@ public class TikaProcessTest {
           100
         );
         LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
-        Assert.assertEquals(0, contentOutputStream.toString("UTF-8").length());
+        Assert.assertEquals(101, contentOutputStream.toString("UTF-8").length());
       }
     }
   }
