@@ -18,6 +18,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -28,6 +29,12 @@ public class TikaRunner {
   private int metadataOutPort = 0;
   private int contentOutPort = 0;
   private boolean parseContent;
+
+  class TikaRunnerThreadFactory implements ThreadFactory {
+    public Thread newThread(Runnable r) {
+      return new Thread(r, "tikarunner");
+    }
+  }
 
   public TikaRunner(int contentInPort,
                     int metadataOutPort,
@@ -45,62 +52,66 @@ public class TikaRunner {
                         OutputStream contentOutputStream,
                         long abortAfterMs,
                         long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException {
-    ExecutorService es = Executors.newFixedThreadPool(3);
-    es.execute(() -> {
-      try {
-        writeContent(baseUri, contentType, contentInPort, contentInStream, maxBytesToParse);
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to send content stream to forked Tika parser JVM", e);
-      }
-    });
-    Future<Metadata> metadataFuture = es.submit(() -> {
-      try {
-        return getMetadata(metadataOutPort, baseUri);
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to read metadata from forked Tika parser JVM", e);
-      }
-    });
-
-    Instant mustFinishByInstant = Instant.now().plus(Duration.ofMillis(abortAfterMs));
-    if (parseContent) {
-      Future contentFuture = es.submit(() -> {
+    ExecutorService es = Executors.newFixedThreadPool(3, new TikaRunnerThreadFactory());
+    try {
+      es.execute(() -> {
         try {
-          getContent(contentOutPort, contentOutputStream);
-          return true;
+          writeContent(baseUri, contentType, contentInPort, contentInStream, maxBytesToParse);
         } catch (Exception e) {
-          throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
+          throw new RuntimeException("Failed to send content stream to forked Tika parser JVM", e);
+        }
+      });
+      Future<Metadata> metadataFuture = es.submit(() -> {
+        try {
+          return getMetadata(metadataOutPort, baseUri);
+        } catch (Exception e) {
+          throw new RuntimeException("Failed to read metadata from forked Tika parser JVM", e);
         }
       });
 
+      Instant mustFinishByInstant = Instant.now().plus(Duration.ofMillis(abortAfterMs));
+      if (parseContent) {
+        Future contentFuture = es.submit(() -> {
+          try {
+            getContent(contentOutPort, contentOutputStream);
+            return true;
+          } catch (Exception e) {
+            throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
+          }
+        });
+
+        while (true) {
+          try {
+            contentFuture.get(250, TimeUnit.MILLISECONDS);
+            break;
+          } catch (TimeoutException e) {
+            LOG.debug("Still waiting for content from parse");
+            if (Instant.now().isAfter(mustFinishByInstant)) {
+              throw e;
+            }
+          }
+        }
+      }
+
+      Metadata metadataResult;
       while (true) {
         try {
-          contentFuture.get(250, TimeUnit.MILLISECONDS);
+          metadataResult = metadataFuture.get(250, TimeUnit.MILLISECONDS);
           break;
         } catch (TimeoutException e) {
-          LOG.debug("Still waiting for content from parse");
+          LOG.debug("Still waiting for metadata from parse");
           if (Instant.now().isAfter(mustFinishByInstant)) {
             throw e;
           }
         }
       }
-    }
-
-    Metadata metadataResult;
-    while (true) {
-      try {
-        metadataResult = metadataFuture.get(250, TimeUnit.MILLISECONDS);
-        break;
-      } catch (TimeoutException e) {
-        LOG.debug("Still waiting for metadata from parse");
-        if (Instant.now().isAfter(mustFinishByInstant)) {
-          throw e;
-        }
+      es.shutdown();
+      return metadataResult;
+    } finally {
+      if (!es.isShutdown()) {
+        es.shutdownNow();
       }
     }
-
-    es.shutdown();
-
-    return metadataResult;
   }
 
   private void writeContent(String baseUri,

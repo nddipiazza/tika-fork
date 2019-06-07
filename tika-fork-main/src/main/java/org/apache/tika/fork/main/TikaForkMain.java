@@ -94,7 +94,6 @@ public class TikaForkMain {
     }
     extractHtmlLinks = Boolean.parseBoolean(parserProperties.getProperty("extractHtmlLinks", "false"));
     includeImages = Boolean.parseBoolean(parserProperties.getProperty("includeImages", "false"));
-    ExecutorService keepAliveEs = Executors.newSingleThreadExecutor();
     boolean parseContent = Boolean.parseBoolean(parserProperties.getProperty("parseContent", "true"));
     String portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + parserProperties.get("runUuid") + ".properties";
     LOG.info("Tika ports file path: \"{}\"", portsFilePath);
@@ -190,10 +189,12 @@ public class TikaForkMain {
           LOG.debug("Could not close metadata out socket server", e);
         }
         FileUtils.deleteQuietly(portsFile);
+        if (!es.isShutdown()) {
+          es.shutdownNow();
+        }
       }
     } else {
       ExecutorService es = Executors.newFixedThreadPool(2);
-
       try {
         contentInServerSocket = new ServerSocket(contentInServerPort);
         metadataOutServerSocket = new ServerSocket(metadataOutServerPort);
@@ -257,6 +258,9 @@ public class TikaForkMain {
           LOG.debug("Could not close metadata out socket server", e);
         }
         FileUtils.deleteQuietly(portsFile);
+        if (es.isShutdown()) {
+          es.shutdownNow();
+        }
       }
     }
   }
