@@ -1,0 +1,8 @@
+1.0b09
+  - move to slf4j log4j2.xml log configuration files.
+  - hide all pdfbox verbose warnings
+
+1.0b08
+  - fix a nasty thread leak that would only occur when parses fail.
+
+started keeping a change log starting at 1.0b08.
