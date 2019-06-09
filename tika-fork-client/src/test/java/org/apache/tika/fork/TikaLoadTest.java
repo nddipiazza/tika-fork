@@ -5,6 +5,7 @@ import org.apache.tika.metadata.Metadata;
 import org.apache.tika.utils.ExceptionUtils;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,8 +13,9 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.net.FileNameMap;
-import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -41,7 +43,8 @@ public class TikaLoadTest {
   }
 
   @Test
-  public void testExternalTikaMultiThreaded() throws Exception {
+  @Ignore
+  public void testLoad() throws Exception {
     numThreads = 5;
     try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
         System.getProperty("java.io.tmpdir"),
@@ -70,8 +73,8 @@ public class TikaLoadTest {
               for (File nextCorpaFile : nextCorpaDir.listFiles()) {
                 ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
                 try (FileInputStream fis = new FileInputStream(nextCorpaFile)) {
-                  FileNameMap fileNameMap = URLConnection.getFileNameMap();
-                  String mimeType = fileNameMap.getContentTypeFor(nextCorpaFile.getName());
+                  Path path = Paths.get(nextCorpaFile.getAbsolutePath());
+                  String mimeType = Files.probeContentType(path);
                   Metadata metadata = tikaProcessPool.parse(nextCorpaFile.getAbsolutePath(),
                       mimeType,
                       fis,

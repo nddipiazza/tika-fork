@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%-5p [%t]: %m%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <logger name="org.apache.pdfbox" level="WARN" />
+        <logger name="org.apache.pdfbox.pdmodel.font" level="ERROR" />
+        <logger name="org.apache.pdfbox.contentstream.PDFStreamEngine" level="ERROR" />
+        <Root level="INFO">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>
