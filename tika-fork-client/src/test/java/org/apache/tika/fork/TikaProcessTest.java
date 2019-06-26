@@ -33,7 +33,7 @@ public class TikaProcessTest {
   String zipBombPath = "test-files" + File.separator + "zip-bomb.zip";
   String bombContentType = "application/vnd.ms-excel";
   Properties parseProperties;
-  long maxBytesToParse = 256000000;
+  long maxBytesToParse = 100000000;
 
   AssertionError exc;
 
