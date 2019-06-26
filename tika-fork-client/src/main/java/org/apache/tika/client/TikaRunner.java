@@ -29,6 +29,8 @@ public class TikaRunner {
   private int metadataOutPort = 0;
   private int contentOutPort = 0;
   private boolean parseContent;
+  private static final int DEFAULT_BUFFER_SIZE = 1024 * 4;
+  private static final int EOF = -1;
 
   class TikaRunnerThreadFactory implements ThreadFactory {
     public Thread newThread(Runnable r) {
@@ -54,9 +56,9 @@ public class TikaRunner {
                         long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException {
     ExecutorService es = Executors.newFixedThreadPool(3, new TikaRunnerThreadFactory());
     try {
-      es.execute(() -> {
+      es.submit(() -> {
         try {
-          writeContent(baseUri, contentType, contentInPort, contentInStream, maxBytesToParse);
+          writeContent(baseUri, contentType, contentInPort, contentInStream);
         } catch (Exception e) {
           throw new RuntimeException("Failed to send content stream to forked Tika parser JVM", e);
         }
@@ -73,7 +75,7 @@ public class TikaRunner {
       if (parseContent) {
         Future contentFuture = es.submit(() -> {
           try {
-            getContent(contentOutPort, contentOutputStream);
+            getContent(contentOutPort, contentOutputStream, maxBytesToParse);
             return true;
           } catch (Exception e) {
             throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
@@ -85,10 +87,10 @@ public class TikaRunner {
             contentFuture.get(250, TimeUnit.MILLISECONDS);
             break;
           } catch (TimeoutException e) {
-            LOG.debug("Still waiting for content from parse");
             if (Instant.now().isAfter(mustFinishByInstant)) {
               throw e;
             }
+            LOG.debug("Still waiting for content from parse");
           }
         }
       }
@@ -99,10 +101,10 @@ public class TikaRunner {
           metadataResult = metadataFuture.get(250, TimeUnit.MILLISECONDS);
           break;
         } catch (TimeoutException e) {
-          LOG.debug("Still waiting for metadata from parse");
           if (Instant.now().isAfter(mustFinishByInstant)) {
             throw e;
           }
+          LOG.debug("Still waiting for metadata from parse");
         }
       }
       es.shutdown();
@@ -117,18 +119,16 @@ public class TikaRunner {
   private void writeContent(String baseUri,
                             String contentType,
                             int port,
-                            InputStream contentInStream,
-                            long maxBytesToParse) throws Exception {
+                            InputStream contentInStream) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
-    try (OutputStream out = socket.getOutputStream();
-         BoundedInputStream boundedInputStream = new BoundedInputStream(contentInStream, maxBytesToParse)) {
+    try (OutputStream out = socket.getOutputStream()) {
       out.write(baseUri.getBytes());
       out.write('\n');
       out.write(contentType.getBytes());
       out.write('\n');
       long numChars;
       do {
-        numChars = IOUtils.copy(boundedInputStream, out);
+        numChars = IOUtils.copy(contentInStream, out);
       } while (numChars > 0);
     } finally {
       socket.close();
@@ -150,12 +150,12 @@ public class TikaRunner {
     }
   }
 
-  private void getContent(int port, OutputStream contentOutputStream) throws Exception {
+  private void getContent(int port, OutputStream contentOutputStream, long maxBytesToParse) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
-    try (InputStream in = socket.getInputStream()) {
+    try (BoundedInputStream boundedInputStream = new BoundedInputStream(socket.getInputStream(), maxBytesToParse)) {
       long numChars;
       do {
-        numChars = IOUtils.copy(in, contentOutputStream);
+        numChars = IOUtils.copy(boundedInputStream, contentOutputStream);
       } while (numChars > 0);
     } finally {
       socket.close();

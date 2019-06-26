@@ -52,8 +52,8 @@ public class TikaForkMain {
     return new TikaParsingHandler(mainUrl, out, main, linksHandler);
   }
 
-  @Option(name = "-configDirectoryPath", usage = "The directory that will contain the configuration files that communicate between the fork process and the client process.")
-  private String configDirectoryPath;
+  @Option(name = "-workDirectoryPath", usage = "The directory that will contain the tmp files that communicate between the fork process and the client process and tmp files for parsing tika.")
+  private String workDirectoryPath;
   @Option(name = "-parserPropertiesFilePath", usage = "The parse configuration file.")
   private String parserPropertiesFilePath;
   @Option(name = "-contentInServerPort", usage = "This is the port for the socket server that will be used to send in the file.")
@@ -75,6 +75,15 @@ public class TikaForkMain {
   boolean includeImages;
 
   private void run() throws Exception {
+    if (StringUtils.isBlank(workDirectoryPath)) {
+      workDirectoryPath = System.getProperty("java.io.tmpdir");
+    } else {
+      if (workDirectoryPath.endsWith(File.separator)) {
+        workDirectoryPath = workDirectoryPath.substring(0, workDirectoryPath.length() - 1);
+      }
+      // set this here to prevent tika tmp files from being written to the default tmpdir which often is undesirable
+      System.setProperty("java.io.tmpdir", workDirectoryPath);
+    }
     parserProperties = new Properties();
     if (StringUtils.isNotBlank(parserPropertiesFilePath)) {
       try (FileReader fr = new FileReader(parserPropertiesFilePath)) {
@@ -85,17 +94,10 @@ public class TikaForkMain {
       Integer.parseInt(parserProperties.getProperty("zipBombCompressionRatio", "200")),
       Integer.parseInt(parserProperties.getProperty("zipBombMaxDepth", "200")),
       Integer.parseInt(parserProperties.getProperty("zipBombMaxPackageEntryDepth", "20")));
-    if (StringUtils.isBlank(configDirectoryPath)) {
-      configDirectoryPath = System.getProperty("java.io.tmpdir");
-    } else {
-      if (configDirectoryPath.endsWith(File.separator)) {
-        configDirectoryPath = configDirectoryPath.substring(0, configDirectoryPath.length() - 1);
-      }
-    }
     extractHtmlLinks = Boolean.parseBoolean(parserProperties.getProperty("extractHtmlLinks", "false"));
     includeImages = Boolean.parseBoolean(parserProperties.getProperty("includeImages", "false"));
     boolean parseContent = Boolean.parseBoolean(parserProperties.getProperty("parseContent", "true"));
-    String portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + parserProperties.get("runUuid") + ".properties";
+    String portsFilePath = workDirectoryPath + File.separator + "tikafork-ports-" + parserProperties.get("runUuid") + ".properties";
     LOG.info("Tika ports file path: \"{}\"", portsFilePath);
     File portsFile = new File(portsFilePath);
     if (parseContent) {

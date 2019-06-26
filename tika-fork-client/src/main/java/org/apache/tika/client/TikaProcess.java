@@ -49,15 +49,15 @@ public class TikaProcess {
   private TikaRunner tikaRunner;
 
   public TikaProcess(String javaPath,
-                     String configDirectoryPath,
+                     String workDirectoryPath,
                      String tikaDistPath,
                      int tikaMaxHeapSizeMb,
                      Properties parserProperties) {
     parseContent = Boolean.parseBoolean(parserProperties.getProperty("parseContent", "false"));
 
-    parseConfigPropertiesFilePath = configDirectoryPath + File.separator + "tikafork-config-" + runUuid + ".properties";
-    parseContextPropertiesFilePath = configDirectoryPath + File.separator + "tikafork-context-" + runUuid + ".properties";
-    portsFilePath = configDirectoryPath + File.separator + "tikafork-ports-" + runUuid + ".properties";
+    parseConfigPropertiesFilePath = workDirectoryPath + File.separator + "tikafork-config-" + runUuid + ".properties";
+    parseContextPropertiesFilePath = workDirectoryPath + File.separator + "tikafork-context-" + runUuid + ".properties";
+    portsFilePath = workDirectoryPath + File.separator + "tikafork-ports-" + runUuid + ".properties";
 
     command = new ArrayList<>();
     command.add(javaPath == null || javaPath.trim().length() == 0 ? CURRENT_JAVA_BINARY : javaPath);
@@ -79,9 +79,9 @@ public class TikaProcess {
 
     command.add("-parserPropertiesFilePath");
     command.add(parseConfigPropertiesFilePath);
-    if (configDirectoryPath != null && configDirectoryPath.trim().length() > 0) {
-      command.add("-configDirectoryPath");
-      command.add(configDirectoryPath);
+    if (workDirectoryPath != null && workDirectoryPath.trim().length() > 0) {
+      command.add("-workDirectoryPath");
+      command.add(workDirectoryPath);
     }
     try {
       process = new ProcessBuilder(command)
@@ -157,7 +157,10 @@ public class TikaProcess {
       Scanner sc = new Scanner(src);
       while (sc.hasNextLine()) {
         String nextLine = sc.nextLine();
-        LOG.info(nextLine);
+        // Do not log stuff that snuck into stdout.
+        if (nextLine != null && nextLine.startsWith("TIKAFORK")) {
+          LOG.info(nextLine.substring(8));
+        }
       }
     }).start();
   }

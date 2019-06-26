@@ -16,7 +16,7 @@ public class TikaProcessPool implements AutoCloseable {
   private GenericObjectPool pool;
 
   public TikaProcessPool(String javaPath,
-                         String configDirectoryPath,
+                         String workDirectoryPath,
                          String tikaDistPath,
                          int tikaMaxHeapSizeMb,
                          Properties parseProperties,
@@ -29,7 +29,7 @@ public class TikaProcessPool implements AutoCloseable {
                          long minEvictableIdleTimeMillis,
                          long softMinEvictableIdleTimeMillis) throws Exception {
     pool = initializePool(javaPath,
-        configDirectoryPath,
+        workDirectoryPath,
         tikaDistPath,
         tikaMaxHeapSizeMb,
         parseProperties,
@@ -71,7 +71,7 @@ public class TikaProcessPool implements AutoCloseable {
   }
 
   public static GenericObjectPool initializePool(String javaPath,
-                                                 String configDirectoryPath,
+                                                 String workDirectoryPath,
                                                  String tikaDistDir,
                                                  int tikaMaxHeapSizeMb,
                                                  Properties parseProperties,
@@ -96,7 +96,7 @@ public class TikaProcessPool implements AutoCloseable {
     config.setBlockWhenExhausted(blockWhenExhausted);
 
     GenericObjectPool pool = new GenericObjectPool<TikaProcess>(new TikaProcessFactory(javaPath,
-        configDirectoryPath,
+        workDirectoryPath,
         tikaDistDir,
         tikaMaxHeapSizeMb,
         parseProperties), config);

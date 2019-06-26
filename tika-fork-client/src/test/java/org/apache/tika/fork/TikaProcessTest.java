@@ -30,6 +30,7 @@ public class TikaProcessTest {
   String xlsPath = "test-files" + File.separator + "xls-sample.xls";
   String txtPath = "test-files" + File.separator + "out.txt";
   String bombFilePath = "test-files" + File.separator + "bomb.xls";
+  String zipBombPath = "test-files" + File.separator + "zip-bomb.zip";
   String bombContentType = "application/vnd.ms-excel";
   Properties parseProperties;
   long maxBytesToParse = 256000000;
@@ -174,8 +175,12 @@ public class TikaProcessTest {
     Assert.assertEquals(numFilesPerThread * numThreads, numParsed.get());
   }
 
+  /**
+   * This test will run an XLS file known to blow up tika. This will cause an OOM in the fork process but it should
+   * gracefully return.
+   */
   @Test
-  public void testExternalTikaBombSingleThread() throws Exception {
+  public void testExternalTikaXlsBombSingleThread() throws Exception {
     try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
         System.getProperty("java.io.tmpdir"),
         tikaDistPath,
@@ -193,6 +198,33 @@ public class TikaProcessTest {
       try (FileInputStream fis = new FileInputStream(bombFilePath)) {
         tikaProcessPool.parse(bombFilePath, bombContentType, fis, contentOutputStream, 300000L, maxBytesToParse);
         Assert.assertEquals(0, contentOutputStream.toString("UTF-8").length());
+      }
+    }
+  }
+
+  /**
+   * This test will stream until it hits maxBytesToParse. Then it will stop. It will have all the partial bytes up
+   * until it stops.
+   */
+  @Test
+  public void testExternalTikaBombZipWithCsvSingleThread() throws Exception {
+    try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
+        System.getProperty("java.io.tmpdir"),
+        tikaDistPath,
+        200,
+        parseProperties,
+        1,
+        1,
+        1,
+        true,
+        30000,
+        3000,
+        -1,
+        -1)) {
+      ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
+      try (FileInputStream fis = new FileInputStream(zipBombPath)) {
+        tikaProcessPool.parse(zipBombPath, "application/zip", fis, contentOutputStream, 300000L, maxBytesToParse);
+        Assert.assertEquals(maxBytesToParse, contentOutputStream.toString("UTF-8").length());
       }
     }
   }
