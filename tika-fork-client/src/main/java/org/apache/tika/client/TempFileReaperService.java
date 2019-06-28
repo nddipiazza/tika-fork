@@ -3,6 +3,8 @@ package org.apache.tika.client;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.AgeFileFilter;
 import org.apache.commons.io.filefilter.FileFilterUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.time.Duration;
@@ -18,6 +20,8 @@ import java.util.concurrent.TimeUnit;
  * A service that cleans up temp files from the work dir.
  */
 public class TempFileReaperService {
+
+  private static final Logger LOG = LoggerFactory.getLogger(TempFileReaperService.class);
 
   private ScheduledExecutorService scheduledExecutorService;
 
@@ -48,12 +52,22 @@ public class TempFileReaperService {
             AgeFileFilter filter = new AgeFileFilter(threshold);
 
             File path = new File(workDirectoryPath);
-            File[] oldFiles = FileFilterUtils.filter(filter, path);
+            File[] oldFiles = FileFilterUtils.filter(filter, path.listFiles());
+            int numDeleted = 0;
 
             for (File file : oldFiles) {
-              FileUtils.deleteQuietly(file);
+              if (file.getName().startsWith("apache-tika-") && file.getName().endsWith(".tmp")) {
+                ++numDeleted;
+                boolean deleted = FileUtils.deleteQuietly(file);
+                LOG.debug("Deleted {} - ", file.getAbsolutePath(), deleted);
+              } else {
+                LOG.debug("Not deleting {}", file.getAbsolutePath());
+              }
             }
+
+            LOG.info("Tika fork parser's TempFileReaperService deleted {} temp files from {} during this iteration.", numDeleted, workDirectoryPath);
           } catch (Exception e) {
+            LOG.error("Could not run temp file reaper service", e);
             throw new RuntimeException("Could not run the schedule", e);
           }
         },

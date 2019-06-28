@@ -21,9 +21,9 @@ public class TempFileReaperServiceTest {
     curDir.mkdirs();
     TempFileReaperService tempFileReaperService = null;
     try {
-      File theFile1 = new File(curDir, "newFile1.txt");
+      File theFile1 = new File(curDir, "apache-tika-235q34523653246.tmp");
       FileUtils.writeStringToFile(theFile1, "hey there!", "UTF-8");
-      File theFile2 = new File(curDir, "newFile2.txt");
+      File theFile2 = new File(curDir, "apache-tika-asdhasfhawefawef.tmp");
       FileUtils.writeStringToFile(theFile2, "hey there!", "UTF-8");
       tempFileReaperService = new TempFileReaperService(curDir.getAbsolutePath(),
           30,
