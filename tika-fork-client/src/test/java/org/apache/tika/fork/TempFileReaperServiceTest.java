@@ -41,6 +41,13 @@ public class TempFileReaperServiceTest {
       Assert.assertFalse(theFile1.exists());
       Assert.assertFalse(theFile2.exists());
 
+      File theFile3 = new File(curDir, "apache-tika-235q34523653246.tmp");
+      FileUtils.writeStringToFile(theFile3, "hey there!", "UTF-8");
+      File theFile4 = new File(curDir, "apache-tika-asdhasfhawefawef.tmp");
+      FileUtils.writeStringToFile(theFile4, "hey there!", "UTF-8");
+
+      Awaitility.await().atMost(40, TimeUnit.SECONDS).until(() -> !theFile3.exists() && !theFile4.exists());
+
     } finally {
       if (tempFileReaperService != null) {
         tempFileReaperService.close();

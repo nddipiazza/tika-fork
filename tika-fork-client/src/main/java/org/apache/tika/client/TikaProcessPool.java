@@ -16,11 +16,11 @@ import java.util.concurrent.TimeUnit;
 
 public class TikaProcessPool implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(TikaProcessPool.class);
-  private static final TemporalUnit DEFAULT_TEMP_REAPER_UNIT = ChronoUnit.HOURS;
-  private static final long DEFAULT_TEMP_REAPER_VAL = 2;
+  private static final TemporalUnit DEFAULT_TEMP_REAPER_UNIT = ChronoUnit.MINUTES;
+  private static final long DEFAULT_TEMP_REAPER_VAL = 10;
   private static final TimeUnit DEFAULT_TEMP_REAPER_JOB_UNIT = TimeUnit.MINUTES;
-  private static final long DEFAULT_TEMP_REAPER_JOB_INITIAL_DELAY = 5;
-  private static final long DEFAULT_TEMP_REAPER_JOB_DELAY = 10;
+  private static final long DEFAULT_TEMP_REAPER_JOB_INITIAL_DELAY = 0;
+  private static final long DEFAULT_TEMP_REAPER_JOB_DELAY = 5;
 
   private GenericObjectPool pool;
   private TempFileReaperService tempFileReaperService;
