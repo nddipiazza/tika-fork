@@ -15,6 +15,20 @@ This program attempts to deal with these problems:
 * Uses commons-pool to provide fine-grained control the pool of the forked Tika JVMs.
 * Provides a "abortAfterMs" parameter to the parse method that will throw a TimeoutException if too much time is taken. This will result in the forked JVM to be aborted. This is useful in the situations where the JVM went into GC hell eating tons of CPU and never returning.
 
+## Parameters
+
+```
+maxHeapMb - the maximum heap size used by a forked tika parser
+parseTimeoutMs - The maximum amount of time in milliseconds that a single parse can take. If a parser does not return by this time, the forked tika parser will be terminated.
+minIdle - The minimum number of tika processes that must be live in the pool. -1 for no minimum.
+maxIdle - The maximum number of tika processes that may be idle in the pool. -1 for no maximum.
+maxTotal - The maximum number of tika processes allowed to be active. -1 for no limit.
+blockWhenExhausted -Block when pool is exhausted. If this is set, will block the thread and wait until a tika process is available.
+maxWaitMillis - Max wait for tika process - The maximum time to wait for a tika process.
+timeBetweenEvictionRunsMillis - Time between eviction checks. The amount of time between the Eviction Runner Thread checks for idle tika processes to evict from the pool.
+maxBytesReturned - Sets the maximum amount of bytes that can be returned from the parser.
+```
+
 ## Usage
 
 See the [Tika Fork Process Unit Tests](https://github.com/nddipiazza/tika-fork/tree/master/tika-fork-client/src/test/java/org/apache/tika/fork) for several detailed examples of how to use the program.
