@@ -65,7 +65,7 @@ public class TempFileReaperService {
               }
             }
 
-            LOG.info("Tika fork parser's TempFileReaperService deleted {} temp files from {} during this iteration.", numDeleted, workDirectoryPath);
+            LOG.debug("Tika fork parser's TempFileReaperService deleted {} temp files from {} during this iteration.", numDeleted, workDirectoryPath);
           } catch (Exception e) {
             LOG.error("Could not run temp file reaper service", e);
             throw new RuntimeException("Could not run the schedule", e);

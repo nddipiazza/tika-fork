@@ -7,5 +7,14 @@ group 'org.apache.tika'
 sourceCompatibility = 1.8
 
 repositories {
-  mavenCentral()
+  maven {
+    url "https://ci-nexus.lucidworks.com/content/groups/public"
+    credentials {
+      username "$lucidNexusUsername"
+      password "$lucidNexusPassword"
+    }
+    authentication {
+      basic(BasicAuthentication)
+    }
+  }
 }

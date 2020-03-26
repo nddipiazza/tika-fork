@@ -31,6 +31,7 @@ public class TikaProcessTest {
   String txtPath = "test-files" + File.separator + "out.txt";
   String bombFilePath = "test-files" + File.separator + "bomb.xls";
   String zipBombPath = "test-files" + File.separator + "zip-bomb.zip";
+  String oneNoteFilePath = "test-files" + File.separator + "test-one-note.one";
   String bombContentType = "application/vnd.ms-excel";
   Properties parseProperties;
   long maxBytesToParse = 100000000;
@@ -121,16 +122,21 @@ public class TikaProcessTest {
             String contentType;
             int numExpectedMetadataElms;
             int numContentCharsExpected;
-            if (i % 3 == 0) {
+            if (i % 4 == 0) {
               path = xlsPath;
               contentType = "application/vnd.ms-excel";
               numExpectedMetadataElms = 23;
               numContentCharsExpected = parseContent ? 4824 : 0;
-            } else if (i % 3 == 1) {
+            } else if (i % 4 == 1) {
               path = pdfPath;
               contentType = "application/pdf";
-              numExpectedMetadataElms = 39;
+              numExpectedMetadataElms = 41;
               numContentCharsExpected = parseContent ? 1069 : 0;
+            } else if (i % 4 == 2) {
+              path = oneNoteFilePath;
+              contentType = "application/onenote; format=one";
+              numExpectedMetadataElms = 24;
+              numContentCharsExpected = parseContent ? 3144 : 0;
             } else {
               path = htmlPath;
               contentType = "text/html";
