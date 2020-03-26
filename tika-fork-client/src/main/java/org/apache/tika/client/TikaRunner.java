@@ -135,6 +135,8 @@ public class TikaRunner {
     }
   }
 
+  static int ct = 0;
+
   private Metadata getMetadata(int port, String baseUri) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
     try (InputStream metadataIn = socket.getInputStream()) {
@@ -142,8 +144,9 @@ public class TikaRunner {
       try {
         return (Metadata) objectInputStream.readObject();
       } catch (IOException e) {
-        LOG.warn("Could not parse metadata for " + baseUri);
-        return new Metadata();
+        // Is there some particular IOExceptions we should allow not to fall through?
+        LOG.error("Could not parse metadata for {} due to {}", baseUri, e.getMessage());
+        throw e;
       }
     } finally {
       socket.close();

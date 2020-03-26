@@ -1,3 +1,7 @@
+1.0onenote5
+
+adding the stack trace into the warning for "cannot parse metadata"
+
 1.0onenote4
 
 making the onenote parser for 2007 office documents perform better.
