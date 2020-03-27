@@ -34,6 +34,7 @@ dependencies {
     compile "args4j:args4j:${args4jVersion}"
     compile 'org.apache.logging.log4j:log4j-slf4j-impl:2.9.0'
     testCompile group: "junit", name: "junit", version: "${junitVersion}"
+    testCompile project(":tika-fork-client")
 }
 
 task copyDependencies(type: Copy) {

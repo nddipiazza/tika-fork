@@ -6,6 +6,7 @@ import org.apache.tika.metadata.Metadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -29,8 +30,6 @@ public class TikaRunner {
   private int metadataOutPort = 0;
   private int contentOutPort = 0;
   private boolean parseContent;
-  private static final int DEFAULT_BUFFER_SIZE = 1024 * 4;
-  private static final int EOF = -1;
 
   class TikaRunnerThreadFactory implements ThreadFactory {
     public Thread newThread(Runnable r) {
@@ -65,7 +64,7 @@ public class TikaRunner {
       });
       Future<Metadata> metadataFuture = es.submit(() -> {
         try {
-          return getMetadata(metadataOutPort, baseUri);
+          return getMetadata(metadataOutPort, baseUri, maxBytesToParse);
         } catch (Exception e) {
           throw new RuntimeException("Failed to read metadata from forked Tika parser JVM", e);
         }
@@ -135,18 +134,16 @@ public class TikaRunner {
     }
   }
 
-  static int ct = 0;
-
-  private Metadata getMetadata(int port, String baseUri) throws Exception {
+  private Metadata getMetadata(int port, String baseUri, long maxBytesToParse) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
     try (InputStream metadataIn = socket.getInputStream()) {
       ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
       try {
         return (Metadata) objectInputStream.readObject();
-      } catch (IOException e) {
+      } catch (EOFException e) {
         // Is there some particular IOExceptions we should allow not to fall through?
-        LOG.error("Could not parse metadata for {} due to {}", baseUri, e.getMessage());
-        throw e;
+        LOG.warn("Could not parse metadata for {} due to EOFException. May have exceeded max bytes to return {}", baseUri, maxBytesToParse);
+        return new Metadata();
       }
     } finally {
       socket.close();

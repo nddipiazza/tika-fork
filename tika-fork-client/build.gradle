@@ -29,11 +29,16 @@ configurations.all {
     exclude module: 'slf4j-log4j12'
 }
 
+task copyDependencies(type: Copy) {
+    from configurations.runtime
+    into new File(buildDir, "dist")
+}
+
 dependencies {
     compile 'org.apache.logging.log4j:log4j-slf4j-impl:2.9.0'
     compile group: "org.apache.commons", name: "commons-pool2", version: "${commonsPoolVersion}"
     compile group: 'commons-io', name: 'commons-io', version: "${commonsIoVersion}"
-
+    compile "args4j:args4j:${args4jVersion}"
 
     compile "org.apache.tika:tika-core:${tikaVersion}"
 
