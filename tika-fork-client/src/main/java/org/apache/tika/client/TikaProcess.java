@@ -65,6 +65,8 @@ public class TikaProcess {
       command.add("-Xmx" + tikaMaxHeapSizeMb + "m");
     }
     command.add("-Djava.awt.headless=true");
+    // remove this later
+    //command.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=9090");
     command.add("-cp");
     command.add(tikaDistPath + File.separator + "*");
     command.add("org.apache.tika.fork.main.TikaForkMain");

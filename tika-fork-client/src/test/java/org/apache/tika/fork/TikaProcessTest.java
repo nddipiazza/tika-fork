@@ -34,7 +34,7 @@ public class TikaProcessTest {
   String oneNoteFilePath = "test-files" + File.separator + "test-one-note.one";
   String bombContentType = "application/vnd.ms-excel";
   Properties parseProperties;
-  long maxBytesToParse = 100000000;
+  long maxBytesToParse = 100000000; // 100 MB is a lot for a test, might wanna decrease this
 
   AssertionError exc;
 
@@ -228,7 +228,14 @@ public class TikaProcessTest {
         -1)) {
       ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
       try (FileInputStream fis = new FileInputStream(zipBombPath)) {
-        tikaProcessPool.parse(zipBombPath, "application/zip", fis, contentOutputStream, 300000L, maxBytesToParse);
+        Metadata metadata = null;
+        try {
+          metadata = tikaProcessPool.parse(zipBombPath, "application/zip", fis, contentOutputStream, 15000L, maxBytesToParse);
+          Assert.fail("Expected a timeout");
+        } catch (Exception e) {
+          Assert.assertEquals(100000000, contentOutputStream.toByteArray().length);
+          Assert.assertNull(metadata);
+        }
       }
     }
   }
@@ -291,7 +298,7 @@ public class TikaProcessTest {
           100
         );
         LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
-        Assert.assertEquals(101, contentOutputStream.toString("UTF-8").length());
+        Assert.assertEquals(100, contentOutputStream.toString("UTF-8").length());
       }
     }
   }

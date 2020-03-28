@@ -1,6 +1,5 @@
 package org.apache.tika.client;
 
-import org.apache.commons.io.input.BoundedInputStream;
 import org.apache.tika.io.IOUtils;
 import org.apache.tika.metadata.Metadata;
 import org.slf4j.Logger;
@@ -30,6 +29,7 @@ public class TikaRunner {
   private int metadataOutPort = 0;
   private int contentOutPort = 0;
   private boolean parseContent;
+  private int contentChunkSize = 5000000;
 
   class TikaRunnerThreadFactory implements ThreadFactory {
     public Thread newThread(Runnable r) {
@@ -64,7 +64,7 @@ public class TikaRunner {
       });
       Future<Metadata> metadataFuture = es.submit(() -> {
         try {
-          return getMetadata(metadataOutPort, baseUri, maxBytesToParse);
+          return getMetadata(metadataOutPort, baseUri);
         } catch (Exception e) {
           throw new RuntimeException("Failed to read metadata from forked Tika parser JVM", e);
         }
@@ -73,8 +73,13 @@ public class TikaRunner {
       Instant mustFinishByInstant = Instant.now().plus(Duration.ofMillis(abortAfterMs));
       if (parseContent) {
         Future contentFuture = es.submit(() -> {
-          try {
-            getContent(contentOutPort, contentOutputStream, maxBytesToParse);
+          try (TikaRunnerGetContentResult contentResult = getContent(contentOutPort, contentOutputStream, maxBytesToParse, baseUri)) {
+            while (!metadataFuture.isDone()) {
+              if (Instant.now().isAfter(mustFinishByInstant)) {
+                throw new TimeoutException("Timed out waiting " + abortAfterMs + " ms for metadata after content was fully parsed.");
+              }
+              Thread.sleep(100L);
+            }
             return true;
           } catch (Exception e) {
             throw new RuntimeException("Failed to read content from forked Tika parser JVM", e);
@@ -134,7 +139,7 @@ public class TikaRunner {
     }
   }
 
-  private Metadata getMetadata(int port, String baseUri, long maxBytesToParse) throws Exception {
+  private Metadata getMetadata(int port, String baseUri) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
     try (InputStream metadataIn = socket.getInputStream()) {
       ObjectInputStream objectInputStream = new ObjectInputStream(metadataIn);
@@ -142,24 +147,56 @@ public class TikaRunner {
         return (Metadata) objectInputStream.readObject();
       } catch (EOFException e) {
         // Is there some particular IOExceptions we should allow not to fall through?
-        LOG.warn("Could not parse metadata for {} due to EOFException. May have exceeded max bytes to return {}", baseUri, maxBytesToParse);
-        return new Metadata();
+        LOG.warn("Could not parse metadata for {} due to EOFException.", baseUri);
+        Metadata blankedResult = new Metadata();
+        blankedResult.set("eof_during_parse", "true");
+        return blankedResult;
       }
     } finally {
       socket.close();
     }
   }
 
-  private void getContent(int port, OutputStream contentOutputStream, long maxBytesToParse) throws Exception {
-    Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
-    try (BoundedInputStream boundedInputStream = new BoundedInputStream(socket.getInputStream(), maxBytesToParse)) {
-      long numChars;
-      do {
-        numChars = IOUtils.copy(boundedInputStream, contentOutputStream);
-      } while (numChars > 0);
-    } finally {
-      socket.close();
+  static private class TikaRunnerGetContentResult implements AutoCloseable {
+    public Socket socket;
+    public InputStream inputStream;
+    public boolean exceededMaxBytes;
+
+    @Override
+    public void close() {
+      try {
+        inputStream.close();
+      } catch (IOException e) {
+        LOG.error("Could not close GetContent input stream", e);
+      }
+      try {
+        socket.close();
+      } catch (IOException e) {
+        LOG.error("Could not close GetContent socket", e);
+      }
     }
+  }
+
+  private TikaRunnerGetContentResult getContent(int port, OutputStream contentOutputStream, long maxBytesToParse, String baseUri) throws Exception {
+    TikaRunnerGetContentResult result = new TikaRunnerGetContentResult();
+    result.socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
+    result.inputStream = result.socket.getInputStream();
+    int numParsed = 0;
+    int numChars;
+    do {
+      int nextNumBytesToParse = (numParsed + contentChunkSize > (int)maxBytesToParse) ?
+        ((int)maxBytesToParse - numParsed) : contentChunkSize;
+      byte[] buf = new byte[nextNumBytesToParse];
+      numChars = IOUtils.read(result.inputStream, buf, 0, nextNumBytesToParse);
+      contentOutputStream.write(buf, 0, numChars);
+      numParsed += numChars;
+      if (numParsed >= maxBytesToParse) {
+        LOG.info("Max bytes {} reached on {}. Ignoring the rest.", maxBytesToParse, baseUri);
+        result.exceededMaxBytes = true;
+        return result;
+      }
+    } while (numChars > 0);
+    return result;
   }
 
   private static Socket getSocket(String host, int port) throws InterruptedException {

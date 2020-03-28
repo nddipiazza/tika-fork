@@ -33,6 +33,7 @@ import java.io.PipedOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -41,7 +42,6 @@ public class TikaForkMain {
   private static final Logger LOG = LoggerFactory.getLogger(TikaForkMain.class);
 
   private static TikaParsingHandler getContentHandler(String mainUrl,
-                                                      Metadata metadata,
                                                       OutputStream out,
                                                       boolean extractHtmlLinks) throws TikaException {
     ContentHandler main = new TikaBodyContentHandler(out, TikaConstants.defaultOutputEncoding);
@@ -126,6 +126,8 @@ public class TikaForkMain {
 
           contentInputStream.connect(contentOutputStream);
 
+          CountDownLatch latch = new CountDownLatch(3);
+
           es.execute(() -> {
             try {
               parseFile(metadataOutputStream, contentOutputStream);
@@ -136,10 +138,12 @@ public class TikaForkMain {
                 LOG.debug("Couldn't close content output stream.");
               }
               throw new RuntimeException("Could not parse file", e);
+            } finally {
+              latch.countDown();
             }
           });
 
-          Future metadataFuture = es.submit(() -> {
+          es.execute(() -> {
             try {
               writeMetadata(metadataInputStream);
             } catch (Exception e) {
@@ -149,10 +153,12 @@ public class TikaForkMain {
                 LOG.debug("Couldn't close metadata output stream.");
               }
               throw new RuntimeException("Could not write metadata", e);
+            } finally {
+              latch.countDown();
             }
           });
 
-          Future contentFuture = es.submit(() -> {
+          es.execute(() -> {
             try {
               writeContent(contentInputStream);
             } catch (Exception e) {
@@ -162,11 +168,16 @@ public class TikaForkMain {
                 LOG.debug("Couldn't close content input stream.");
               }
               throw new RuntimeException("Could not write content", e);
+            } finally {
+              latch.countDown();
             }
           });
 
-          metadataFuture.get();
-          contentFuture.get();
+          try {
+            latch.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
         }
       } finally {
         try {
@@ -328,7 +339,7 @@ public class TikaForkMain {
 
       TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
 
-      TikaParsingHandler contentHandler = getContentHandler(baseUri, metadata, contentOutputStream, extractHtmlLinks);
+      TikaParsingHandler contentHandler = getContentHandler(baseUri, contentOutputStream, extractHtmlLinks);
       compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
 
       objectOutputStream.writeObject(metadata);

@@ -1,3 +1,15 @@
+2.0
+
+overhaul on the timeout management and thread management
+
+1.0onenote5
+
+adding the stack trace into the warning for "cannot parse metadata"
+
+1.0onenote4
+
+making the onenote parser for 2007 office documents perform better.
+
 1.0b09
   - move to slf4j log4j2.xml log configuration files.
   - hide all pdfbox verbose warnings

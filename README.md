@@ -18,3 +18,12 @@ This program attempts to deal with these problems:
 ## Usage
 
 See the [Tika Fork Process Unit Test](tika-fork/src/test/java/org/apache/tika/fork/TikaProcessTest.java) for several detailed examples of how to use the program.
+
+
+## Running the tests
+
+Run ./gradlew :tika-fork-main:clean :tika-fork-main:dist
+
+first to set up the tika remote build.
+
+Then go ahead and run the tests.
