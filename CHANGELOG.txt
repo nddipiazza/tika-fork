@@ -1,3 +1,18 @@
+2.3
+
+bump to tika 1.24.1 instead of using the custom build
+
+create allow an alternative method that will do the tika fork parser with a filename as an input instead of an input
+stream. this eliminates the file download portion of parsing, and can cut down significantly on timeout exceptions.
+
+2.2
+
+stop filtering output from tika fork parser. it is crucial when there are issues.
+
+2.1
+
+log the reason for content not being downloaded
+
 2.0
 
 overhaul on the timeout management and thread management

@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -45,6 +46,22 @@ public class TikaRunner {
     this.metadataOutPort = metadataOutPort;
     this.contentOutPort = contentOutPort;
     this.parseContent = parseContent;
+  }
+
+  public Metadata parse(String baseUri,
+                        String contentType,
+                        String filename,
+                        OutputStream contentOutputStream,
+                        long abortAfterMs,
+                        long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException, IOException {
+    try (FileInputStream fis = new FileInputStream(filename)) {
+      return parse(baseUri,
+          contentType,
+          fis,
+          contentOutputStream,
+          abortAfterMs,
+          maxBytesToParse);
+    }
   }
 
   public Metadata parse(String baseUri,

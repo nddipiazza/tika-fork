@@ -137,6 +137,7 @@ public class TikaForkMain {
               } catch (IOException e1) {
                 LOG.debug("Couldn't close content output stream.");
               }
+              LOG.error("Could not parse file", e);
               throw new RuntimeException("Could not parse file", e);
             } finally {
               latch.countDown();
@@ -152,6 +153,7 @@ public class TikaForkMain {
               } catch (IOException e1) {
                 LOG.debug("Couldn't close metadata output stream.");
               }
+              LOG.error("Could not parse metadata", e);
               throw new RuntimeException("Could not write metadata", e);
             } finally {
               latch.countDown();

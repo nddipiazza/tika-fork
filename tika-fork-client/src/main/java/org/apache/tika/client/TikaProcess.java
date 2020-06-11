@@ -160,8 +160,8 @@ public class TikaProcess {
       while (sc.hasNextLine()) {
         String nextLine = sc.nextLine();
         // Do not log stuff that snuck into stdout.
-        if (nextLine != null && nextLine.startsWith("TIKAFORK")) {
-          LOG.info(nextLine.substring(8));
+        if (nextLine != null) {
+          LOG.info(nextLine);
         }
       }
     }).start();
@@ -174,5 +174,14 @@ public class TikaProcess {
                         long abortAfterMs,
                         long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException {
     return tikaRunner.parse(baseUri, contentType, contentInputStream, contentOutputStream, abortAfterMs, maxBytesToParse);
+  }
+
+  public Metadata parse(String baseUri,
+                        String contentType,
+                        String filename,
+                        OutputStream contentOutputStream,
+                        long abortAfterMs,
+                        long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException, IOException {
+    return tikaRunner.parse(baseUri, contentType, filename, contentOutputStream, abortAfterMs, maxBytesToParse);
   }
 }

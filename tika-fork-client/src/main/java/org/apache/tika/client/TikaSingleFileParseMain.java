@@ -37,7 +37,7 @@ public class TikaSingleFileParseMain {
         fis,
         contentOutputStream,
         300000L,
-        500
+        50000000
       );
 
       System.out.println("Metadata elements parsed: " + metadata.size());

@@ -26,6 +26,7 @@ public class TikaForkMainTest {
   String txtPath = "test-files" + File.separator + "out.txt";
   String bombFilePath = "test-files" + File.separator + "bomb.xls";
   String zipBombPath = "test-files" + File.separator + "zip-bomb.zip";
+  String encryptedPptPath = "test-files" + File.separator + "encrypted.ppt";
 
   public static Integer findRandomOpenPortOnAllLocalInterfaces() throws IOException {
     try (ServerSocket socket = new ServerSocket(0)) {
@@ -786,6 +787,36 @@ public class TikaForkMainTest {
         LOG.info("Got expected timeout");
       }
       Assert.assertEquals(10000, contentOutputStream.size());
+    }
+
+    singleThreadEx.shutdownNow();
+  }
+
+  @Test
+  public void testEncryptedPpt() throws Exception {
+    ExecutorService singleThreadEx = Executors.newSingleThreadExecutor();
+
+    singleThreadEx.execute(() -> {
+      try {
+        TikaForkMain.main(args);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    });
+
+    TikaRunner tikaRunner = new TikaRunner(contentInServerPort, metadataOutServerPort, contentOutServerPort, true);
+
+    ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
+    try (FileInputStream fis = new FileInputStream(encryptedPptPath)) {
+      Metadata metadata = tikaRunner.parse(encryptedPptPath,
+        "application/vnd.ms-powerpoint",
+        fis,
+        contentOutputStream,
+        4000L,
+        400000
+      );
+
+      System.out.println(metadata);
     }
 
     singleThreadEx.shutdownNow();

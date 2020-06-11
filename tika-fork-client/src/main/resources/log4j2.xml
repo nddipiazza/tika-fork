@@ -7,6 +7,7 @@
     </Appenders>
     <Loggers>
         <logger name="org.apache.pdfbox" level="ERROR" />
+        <logger name="org.apache.tika.parser.microsoft.onenote" level="ERROR" />
         <logger name="org.apache.tika.config.InitializableProblemHandler" level="ERROR" />
         <Root level="INFO">
             <AppenderRef ref="Console"/>

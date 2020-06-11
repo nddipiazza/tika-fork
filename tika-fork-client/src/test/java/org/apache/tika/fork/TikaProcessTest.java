@@ -32,6 +32,7 @@ public class TikaProcessTest {
   String bombFilePath = "test-files" + File.separator + "bomb.xls";
   String zipBombPath = "test-files" + File.separator + "zip-bomb.zip";
   String oneNoteFilePath = "test-files" + File.separator + "test-one-note.one";
+  String encryptedPpt = "test-files" + File.separator + "encrypted.ppt";
   String bombContentType = "application/vnd.ms-excel";
   Properties parseProperties;
   long maxBytesToParse = 100000000; // 100 MB is a lot for a test, might wanna decrease this
@@ -62,7 +63,28 @@ public class TikaProcessTest {
         3000,
         -1,
         -1)) {
-      doParse(tikaProcessPool, true);
+      doParse(tikaProcessPool, true, false);
+    }
+  }
+
+  @Test
+  public void testExternalTikaMultiThreadedSendFilenamesInsteadOfInputStreams() throws Exception {
+    numThreads = 5;
+    numFilesPerThread = 50;
+    try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
+        System.getProperty("java.io.tmpdir"),
+        tikaDistPath,
+        200,
+        parseProperties,
+        -1,
+        -1,
+        20,
+        true,
+        30000,
+        3000,
+        -1,
+        -1)) {
+      doParse(tikaProcessPool, true, true);
     }
   }
 
@@ -83,7 +105,7 @@ public class TikaProcessTest {
         3000,
         -1,
         -1)) {
-      doParse(tikaProcessPool, true);
+      doParse(tikaProcessPool, true, false);
     }
   }
 
@@ -105,11 +127,13 @@ public class TikaProcessTest {
         3000,
         -1,
         -1)) {
-      doParse(tikaProcessPool, false);
+      doParse(tikaProcessPool, false, false);
     }
   }
 
-  private void doParse(TikaProcessPool tikaProcessPool, boolean parseContent) throws Exception {
+  private void doParse(TikaProcessPool tikaProcessPool,
+                       boolean parseContent,
+                       boolean sendFilenameInsteadOfInputStream) throws Exception {
     AtomicInteger numParsed = new AtomicInteger(0);
     Runnable r = () -> {
       try {
@@ -130,7 +154,7 @@ public class TikaProcessTest {
             } else if (i % 4 == 1) {
               path = pdfPath;
               contentType = "application/pdf";
-              numExpectedMetadataElms = 41;
+              numExpectedMetadataElms = 44;
               numContentCharsExpected = parseContent ? 1069 : 0;
             } else if (i % 4 == 2) {
               path = oneNoteFilePath;
@@ -144,19 +168,34 @@ public class TikaProcessTest {
               numContentCharsExpected = parseContent ? 2648 : 0;
             }
             ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
-            try (FileInputStream fis = new FileInputStream(path)) {
+            if (sendFilenameInsteadOfInputStream) {
               Metadata metadata = tikaProcessPool.parse(path,
                   contentType,
-                  fis,
+                  path,
                   contentOutputStream,
                   300000L,
                   maxBytesToParse
-                  );
+              );
               LOG.info("Metadata from the tika process: {}", metadata);
               Assert.assertEquals(numExpectedMetadataElms, metadata.size());
               //LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
               Assert.assertEquals(numContentCharsExpected, contentOutputStream.toString("UTF-8").length());
               numParsed.incrementAndGet();
+            } else {
+              try (FileInputStream fis = new FileInputStream(path)) {
+                Metadata metadata = tikaProcessPool.parse(path,
+                    contentType,
+                    fis,
+                    contentOutputStream,
+                    300000L,
+                    maxBytesToParse
+                );
+                LOG.info("Metadata from the tika process: {}", metadata);
+                Assert.assertEquals(numExpectedMetadataElms, metadata.size());
+                //LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
+                Assert.assertEquals(numContentCharsExpected, contentOutputStream.toString("UTF-8").length());
+                numParsed.incrementAndGet();
+              }
             }
           }
         } catch (Exception ex) {
@@ -299,6 +338,43 @@ public class TikaProcessTest {
         );
         LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
         Assert.assertEquals(100, contentOutputStream.toString("UTF-8").length());
+      }
+    }
+  }
+
+
+  @Test
+  public void testTikaProcessEncryptedPpt() throws Exception {
+    try (TikaProcessPool tikaProcessPool = new TikaProcessPool(javaPath,
+      System.getProperty("java.io.tmpdir"),
+      tikaDistPath,
+      200,
+      parseProperties,
+      0,
+      -1,
+      3,
+      true,
+      30000,
+      1000,
+      5000,
+      -1)) {
+      String path;
+      String contentType;
+
+      path = encryptedPpt;
+      contentType = "application/vnd.ms-powerpoint";
+
+      ByteArrayOutputStream contentOutputStream = new ByteArrayOutputStream();
+      try (FileInputStream fis = new FileInputStream(path)) {
+        Metadata metadata = tikaProcessPool.parse(path,
+          contentType,
+          fis,
+          contentOutputStream,
+          300000L,
+          100
+        );
+        LOG.info("Content from the tika process: {}", contentOutputStream.toString("UTF-8"));
+        Assert.assertEquals(0, contentOutputStream.toString("UTF-8").length());
       }
     }
   }

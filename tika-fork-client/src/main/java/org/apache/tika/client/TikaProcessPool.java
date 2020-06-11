@@ -134,6 +134,33 @@ public class TikaProcessPool implements AutoCloseable {
     }
   }
 
+  public Metadata parse(String baseUri,
+                        String contentType,
+                        String filename,
+                        OutputStream contentOutputStream,
+                        long abortAfterMs,
+                        long maxBytesToParse) throws Exception {
+    TikaProcess process = (TikaProcess) pool.borrowObject();
+    try {
+      return process.parse(baseUri,
+          contentType,
+          filename,
+          contentOutputStream,
+          abortAfterMs,
+          maxBytesToParse);
+    } catch (Exception e) {
+      pool.invalidateObject(process);
+      // Do not return the object to the pool twice
+      process = null;
+      throw e;
+    } finally {
+      // Make sure the object is returned to the pool
+      if (null != process) {
+        pool.returnObject(process);
+      }
+    }
+  }
+
   public static GenericObjectPool initializePool(String javaPath,
                                                  String workDirectoryPath,
                                                  String tikaDistDir,
