@@ -1,3 +1,9 @@
+2.3.1
+
+change the tika fork parser that takes a filename input and modify it slightly so that instead of sending the
+socket the content input stream, send the filename so that the tika fork main can use the FileInputStream directly.
+This will cut out some unnecessary socket communication.
+
 2.3
 
 bump to tika 1.24.1 instead of using the custom build

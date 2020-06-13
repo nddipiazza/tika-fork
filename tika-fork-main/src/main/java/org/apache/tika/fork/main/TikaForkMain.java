@@ -21,8 +21,10 @@ import org.kohsuke.args4j.Option;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.ContentHandler;
+import org.xml.sax.SAXException;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -325,6 +327,7 @@ public class TikaForkMain {
 
       String baseUri = "";
       String contentType = "";
+      String inputIsFilenameStr = "";
       int nextChar;
       while ((nextChar = inputStream.read()) != '\n') {
         baseUri += (char)nextChar;
@@ -332,22 +335,36 @@ public class TikaForkMain {
       while ((nextChar = inputStream.read()) != '\n') {
         contentType += (char)nextChar;
       }
-
-      LOG.info("Next file to parse baseUri={}, contentType={}", baseUri, contentType);
+      while ((nextChar = inputStream.read()) != '\n') {
+        inputIsFilenameStr += (char)nextChar;
+      }
 
       if (StringUtils.isNotBlank(contentType)) {
         metadata.set(Metadata.CONTENT_TYPE, contentType);
       }
 
-      TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
+      if (Boolean.parseBoolean(inputIsFilenameStr)) {
+        String tmpFilePath = IOUtils.toString(inputStream);
+        try (FileInputStream fis = new FileInputStream(tmpFilePath)) {
+          LOG.info("Next file to parse baseUri={}, contentType={}, tmpFilePath={}", baseUri, contentType, tmpFilePath);
+          doTikaParse(contentOutputStream, context, metadata, compositeParser, objectOutputStream, baseUri, TikaInputStream.get(fis));
+        }
+      } else {
+        LOG.info("Next file to parse baseUri={}, contentType={}", baseUri, contentType);
 
-      TikaParsingHandler contentHandler = getContentHandler(baseUri, contentOutputStream, extractHtmlLinks);
-      compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
+        doTikaParse(contentOutputStream, context, metadata, compositeParser, objectOutputStream, baseUri, TikaInputStream.get(inputStream));
+      }
 
-      objectOutputStream.writeObject(metadata);
     } finally {
       contentOutputStream.close();
     }
+  }
+
+  private void doTikaParse(OutputStream contentOutputStream, ParseContext context, Metadata metadata, CompositeParser compositeParser, ObjectOutputStream objectOutputStream, String baseUri, TikaInputStream tikaInputStream2) throws TikaException, IOException, SAXException {
+    TikaInputStream tikaInputStream = tikaInputStream2;
+    TikaParsingHandler contentHandler = getContentHandler(baseUri, contentOutputStream, extractHtmlLinks);
+    compositeParser.parse(tikaInputStream, contentHandler, metadata, context);
+    objectOutputStream.writeObject(metadata);
   }
 
   /**

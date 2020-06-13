@@ -5,8 +5,8 @@ import org.apache.tika.metadata.Metadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.EOFException;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -54,14 +54,14 @@ public class TikaRunner {
                         OutputStream contentOutputStream,
                         long abortAfterMs,
                         long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException, IOException {
-    try (FileInputStream fis = new FileInputStream(filename)) {
-      return parse(baseUri,
-          contentType,
-          fis,
-          contentOutputStream,
-          abortAfterMs,
-          maxBytesToParse);
-    }
+    ByteArrayInputStream bais = new ByteArrayInputStream(filename.getBytes());
+    return parseImpl(baseUri,
+        contentType,
+        bais,
+        contentOutputStream,
+        abortAfterMs,
+        maxBytesToParse,
+        true);
   }
 
   public Metadata parse(String baseUri,
@@ -70,11 +70,27 @@ public class TikaRunner {
                         OutputStream contentOutputStream,
                         long abortAfterMs,
                         long maxBytesToParse) throws InterruptedException, ExecutionException, TimeoutException {
+    return parseImpl(baseUri,
+        contentType,
+        contentInStream,
+        contentOutputStream,
+        abortAfterMs,
+        maxBytesToParse,
+        false);
+  }
+
+  private Metadata parseImpl(String baseUri,
+                             String contentType,
+                             InputStream contentInStream,
+                             OutputStream contentOutputStream,
+                             long abortAfterMs,
+                             long maxBytesToParse,
+                             boolean inputIsFilename) throws InterruptedException, ExecutionException, TimeoutException {
     ExecutorService es = Executors.newFixedThreadPool(3, new TikaRunnerThreadFactory());
     try {
       es.submit(() -> {
         try {
-          writeContent(baseUri, contentType, contentInPort, contentInStream);
+          writeContent(baseUri, contentType, contentInPort, contentInStream, inputIsFilename);
         } catch (Exception e) {
           throw new RuntimeException("Failed to send content stream to forked Tika parser JVM", e);
         }
@@ -140,12 +156,15 @@ public class TikaRunner {
   private void writeContent(String baseUri,
                             String contentType,
                             int port,
-                            InputStream contentInStream) throws Exception {
+                            InputStream contentInStream,
+                            boolean inputIsFilename) throws Exception {
     Socket socket = getSocket(InetAddress.getLocalHost().getHostAddress(), port);
     try (OutputStream out = socket.getOutputStream()) {
       out.write(baseUri.getBytes());
       out.write('\n');
       out.write(contentType.getBytes());
+      out.write('\n');
+      out.write(String.valueOf(inputIsFilename).getBytes());
       out.write('\n');
       long numChars;
       do {
